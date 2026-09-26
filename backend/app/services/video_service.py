@@ -153,14 +153,23 @@ def refresh_meta(video_id: int) -> dict[str, Any]:
 
 
 def _remove_media_files(row: dict[str, Any]) -> None:
+    """删除视频对应的磁盘文件（视频 + 封面）。
+
+    删除文件只是「尽力而为」：单个文件删不掉（被占用 / 路径异常）不应该让整条
+    记录都删不掉，更不该把请求变成 500。因此这里吞掉 OSError / ValueError 并留
+    警告日志——出问题时能看到是哪一条路径，但业务流程照常往下走。
+    """
     settings = get_settings()
     for key in ("path", "cover"):
         rel = row.get(key) or ""
         if not rel:
             continue
-        target = (settings.storage_root / rel).resolve()
-        if file_utils.is_relative_to(target, settings.storage_root):
-            file_utils.remove_file(target)
+        try:
+            target = (settings.storage_root / rel).resolve()
+            if file_utils.is_relative_to(target, settings.storage_root):
+                file_utils.remove_file(target)
+        except (OSError, ValueError) as exc:  # 路径非法 / 文件被占用等
+            logger.warning("删除媒体文件失败 video#%s %s: %s", row.get("id"), rel, exc)
 
 
 # ===========================================================================
