@@ -34,7 +34,8 @@
         </div>
       </div>
 
-      <div class="mm-card" style="overflow:hidden">
+      <!-- 表格（桌面） -->
+      <div class="mm-card" style="overflow:hidden" v-if="!mmIsMobile">
         <el-table :data="list" v-loading="loading" stripe row-key="id">
           <el-table-column label="排序" width="130">
             <template #default="{ row, $index }">
@@ -105,6 +106,55 @@
         </el-table>
       </div>
 
+      <!-- 卡片列表（手机） -->
+      <div v-else class="m-list" v-loading="loading">
+        <div v-if="!loading && !list.length" class="mm-card">
+          <div class="mm-card__body" style="text-align:center;padding:36px 14px">
+            <el-empty description="还没有分类，先创建一个吧" :image-size="70"></el-empty>
+            <el-button type="primary" @click="openCreate">新增分类</el-button>
+          </div>
+        </div>
+
+        <div v-for="(row, index) in list" :key="row.id" class="m-item">
+          <div class="m-item__main" @click="openEdit(row)">
+            <div class="m-item__cover" style="width:96px">
+              <img v-if="row.cover_url" :src="row.cover_url" alt="" />
+              <div v-else class="v-card__placeholder" :style="{ background: grad(row.name), fontSize: 14 }">
+                {{ initials(row.name) }}
+              </div>
+            </div>
+            <div class="m-item__body">
+              <div class="m-item__top">
+                <span class="m-item__title mm-grow mm-ellipsis">{{ row.name }}</span>
+                <!-- 开关放标题行右侧，避免和下面一排按钮挤在一行 -->
+                <el-switch :model-value="row.status === 1" @click.stop
+                           @change="toggleStatus(row)"></el-switch>
+              </div>
+              <div class="m-item__sub mm-clamp-2">{{ row.description || '暂无描述' }}</div>
+              <div class="m-item__meta">
+                <span class="mm-tag" :class="row.video_count ? '' : 'mm-tag--muted'">{{ row.video_count }} 个视频</span>
+                <span>#{{ row.id }} · 排序 {{ row.sort }}</span>
+                <span>{{ dateText(row.created_at) }}</span>
+                <span :class="row.status ? '' : 'mm-muted'">{{ row.status ? '启用' : '隐藏' }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="m-item__acts">
+            <el-button size="small" text :disabled="index === 0" @click="move(index, -1)"
+                       title="上移" aria-label="上移">
+              <el-icon><ArrowUp /></el-icon>
+            </el-button>
+            <el-button size="small" text :disabled="index === list.length - 1" @click="move(index, 1)"
+                       title="下移" aria-label="下移">
+              <el-icon><ArrowDown /></el-icon>
+            </el-button>
+            <el-button size="small" @click="openEdit(row)">编辑</el-button>
+            <el-button size="small" @click="goVideos(row)">查看视频</el-button>
+            <el-button size="small" type="danger" plain @click="remove(row)">删除</el-button>
+          </div>
+        </div>
+      </div>
+
       <!-- 新增 / 编辑 -->
       <el-dialog v-model="visible" :title="form.id ? '编辑分类' : '新增分类'" width="520px">
         <div class="mm-col" style="gap:14px">
@@ -118,7 +168,7 @@
           </div>
           <div class="mm-field">
             <label class="mm-field__label">封面</label>
-            <div style="display:grid;grid-template-columns:180px 1fr;gap:12px;align-items:start">
+            <div class="cover-grid">
               <div class="cover-preview">
                 <img v-if="form.cover_url" :src="form.cover_url" />
                 <div v-else class="cover-preview__empty">无封面</div>
@@ -132,12 +182,12 @@
             </div>
             <input ref="coverInput" type="file" accept="image/*" style="display:none" @change="onCoverPick" />
           </div>
-          <div class="mm-row">
+          <div class="mm-row mm-stack-sm">
             <div class="mm-field mm-grow">
               <label class="mm-field__label">排序值（越小越靠前）</label>
               <el-input-number v-model="form.sort" :min="-9999" :max="9999" style="width:100%"></el-input-number>
             </div>
-            <div class="mm-field" style="padding-top:22px">
+            <div class="mm-field mm-field--inline-check">
               <el-checkbox v-model="form.status" :true-value="1" :false-value="0">启用（用户端可见）</el-checkbox>
             </div>
           </div>

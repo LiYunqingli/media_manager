@@ -151,6 +151,9 @@ body.admin-body {
   top: 0;
   z-index: 110;
 }
+.admin-topbar__head {
+  min-width: 0;
+}
 .admin-topbar__title {
   font-size: 16px;
   font-weight: 600;
@@ -158,6 +161,15 @@ body.admin-body {
 .admin-topbar__crumb {
   font-size: 12.5px;
   color: var(--text-3);
+}
+
+/* 抽屉开关与侧栏关闭按钮：仅在 ≤1023px 出现（见文末 §8） */
+.admin-burger,
+.admin-side__close {
+  display: none;
+}
+.admin-side__close {
+  margin-left: auto;
 }
 
 .admin-content {
@@ -435,8 +447,7 @@ body.admin-body {
   gap: 10px;
 }
 
-/* 未完成的上传会话行 */
-.session-row {
+/* 未完成的上传会话行 */.session-row {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -461,44 +472,53 @@ body.admin-body {
   object-fit: cover;
 }
 
+/* 弹窗内的两栏栅格（封面 + 表单）：手机上折成一列，见 §8 */
+.edit-grid {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 18px;
+}
+.cover-grid {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 12px;
+  align-items: start;
+}
+/* 与输入框同行的勾选项：桌面端靠上内边距与输入框对齐（手机端归零，见 §8） */
+.mm-field--inline-check {
+  padding-top: 22px;
+}
+
 /* --------------------------------------------------------------------------
-   5. 响应式（管理端也能在平板上用）
+   5. 响应式骨架：≤1023px 起侧栏改为抽屉
+   —— 断点值与 admin-common.js 的 MM.breakpoint 必须保持一致
    -------------------------------------------------------------------------- */
 @media (max-width: 1023px) {
   .admin-side {
+    width: min(80vw, 268px);
     transform: translateX(-100%);
+    /* 抽屉收起时彻底移出无障碍树，否则 Tab 会跳进看不见的菜单 */
+    visibility: hidden;
     box-shadow: var(--shadow-lg);
+    transition: transform 0.24s ease, visibility 0.24s ease;
   }
   .admin-layout--mobile-open .admin-side {
     transform: none;
+    visibility: visible;
   }
   .admin-main {
     margin-left: 0 !important;
   }
   .admin-content {
-    padding: 14px;
+    padding: 16px;
   }
-}
-
-@media (max-width: 640px) {
-  .stat-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+  /* 此断点下改由汉堡按钮开合抽屉，桌面端的折叠按钮与折叠态一并失效 */
+  .admin-burger,
+  .admin-side__close {
+    display: inline-flex;
   }
-  .stat-card {
-    padding: 12px;
-  }
-  .stat-card__value {
-    font-size: 20px;
-  }
-  .toolbar {
-    padding: 12px;
-  }
-  .upload-drop {
-    padding: 28px 14px;
-  }
-  .stage-track {
-    font-size: 10px;
+  .admin-collapse {
+    display: none;
   }
 }
 
@@ -610,4 +630,345 @@ body.admin-body {
 }
 .admin-layout--mobile-open .admin-mask {
   display: block;
+}
+
+/* --------------------------------------------------------------------------
+   8. 手机端（≤767px）
+   —— 断点与 admin-common.js 的 MM.breakpoint.mobile 一致
+   -------------------------------------------------------------------------- */
+
+/* 8.1 列表卡片
+   手机上 12 列的 el-table 只剩一条缝，改用卡片；结构由各页面在
+   mmIsMobile 下渲染，桌面端仍是表格。宽度按最窄 320px 反推。 */
+.m-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.m-item {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.m-item__main {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+}
+.m-item__cover {
+  flex: none;
+  position: relative; /* .v-card__placeholder 是绝对定位，必须有定位祖先兜住 */
+  width: 108px;
+  aspect-ratio: 16 / 9;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--panel-2);
+}
+.m-item__cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.m-item__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.m-item__title {
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+.m-item__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.m-item__sub {
+  font-size: 11.5px;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+.m-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 9px;
+  font-size: 11.5px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.m-item__acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+/* Element Plus 给相邻按钮加了 margin-left，这里已用 gap，避免间距翻倍 */
+.m-item__acts .el-button + .el-button {
+  margin-left: 0;
+}
+.m-item__acts .el-dropdown {
+  display: inline-flex;
+}
+.m-item__acts .el-switch {
+  flex: none;
+}
+
+@media (max-width: 767px) {
+  /* 8.2 骨架与顶栏 */
+  .admin-content {
+    padding: 12px;
+  }
+  .admin-topbar {
+    padding: 0 12px;
+    gap: 8px;
+  }
+  .admin-topbar__title {
+    font-size: 15px;
+    max-width: 52vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .admin-topbar__user {
+    gap: 6px;
+  }
+  /* 面包屑与昵称让位给标题，头像 + 退出足够 */
+  .admin-topbar__crumb,
+  .admin-topbar__usertext {
+    display: none;
+  }
+  .admin-side__brand {
+    padding: 0 12px 0 14px;
+  }
+  .admin-menu__item {
+    padding: 11px 12px;
+    font-size: 14px;
+  }
+
+  /* 8.3 工具栏：筛选控件竖排铺满，免得挤在一行里被切成碎片 */
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .toolbar__title {
+    margin-right: 0;
+    font-size: 14px;
+  }
+  .toolbar .mm-row {
+    width: 100%;
+  }
+  .toolbar .el-input,
+  .toolbar .el-select,
+  .toolbar .el-input-number {
+    width: 100% !important;
+  }
+  .toolbar .mm-row > .el-button {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* 8.4 卡片头 / 趋势图 / 会话行 */
+  .mm-card__head {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+  .mm-card__body {
+    padding: 14px;
+  }
+  /* 7/14/30 天切换按钮平分整行 */
+  .mm-card__head > .el-radio-group {
+    width: 100%;
+  }
+  .mm-card__head > .el-radio-group .el-radio-button {
+    flex: 1;
+  }
+  .mm-card__head > .el-radio-group .el-radio-button__inner {
+    width: 100%;
+  }
+  /* 柱状图横向滚动：30 天挤在一屏里谁也看不清 */
+  .bar-chart {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+  .bar-col {
+    flex: 0 0 30px;
+  }
+  .bar-col__label {
+    font-size: 10px;
+  }
+  .session-row {
+    flex-wrap: wrap;
+    gap: 2px 10px;
+  }
+  .session-row > .mm-grow {
+    flex: 1 0 100%;
+  }
+
+  /* 8.5 分页 */
+  .mm-pager {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .mm-pager__info {
+    margin-right: 0;
+    font-size: 12px;
+  }
+  .el-pagination__jump {
+    display: none !important;
+  }
+
+  /* 8.6 弹窗 / 抽屉 / 消息框：按视口收窄，别顶出屏幕 */
+  .el-dialog {
+    width: calc(100vw - 24px) !important;
+    max-width: 640px;
+    margin: 4vh auto 24px !important;
+  }
+  .el-dialog__header {
+    padding-right: 26px;
+  }
+  .el-dialog__body {
+    padding: 14px 4px;
+  }
+  .el-dialog__footer {
+    padding-top: 12px;
+  }
+  .el-drawer {
+    width: 100% !important;
+  }
+  .el-drawer__header {
+    margin-bottom: 12px;
+    padding: 14px;
+  }
+  .el-drawer__body {
+    padding: 0 14px;
+  }
+  .el-drawer__footer {
+    padding: 12px 14px;
+  }
+  /* 抽屉底部的「提示 + 取消/保存」在窄屏改成两行 */
+  .el-drawer__footer .mm-row--between {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .el-drawer__footer .el-button {
+    flex: 1;
+  }
+  /* 抽屉内的筛选控件同样铺满，避免内联宽度把行挤爆 */
+  .el-drawer .el-input,
+  .el-drawer .el-select {
+    width: 100% !important;
+  }
+  .el-message-box {
+    width: auto !important;
+    max-width: calc(100vw - 28px);
+    min-width: 0;
+  }
+  .el-message-box__btns {
+    flex-wrap: wrap;
+  }
+
+  /* 8.7 弹窗内栅格折成一列 */
+  .edit-grid,
+  .cover-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* .mm-stack-sm：手机上由横排改竖排的表单行 */
+  .mm-stack-sm {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px !important;
+  }
+  .mm-stack-sm > .mm-field--inline-check {
+    padding-top: 0;
+  }
+
+  /* 8.9 描述列表：窄屏下标签列会被长路径挤成「一字一行」，
+     同时内容列把整个卡片顶宽，这里给标签兜底宽度并允许长串换行 */
+  .el-descriptions__label {
+    min-width: 4.6em;
+    white-space: nowrap;
+  }
+  .el-descriptions__content {
+    word-break: break-all;
+  }
+
+  /* 8.8 触摸尺寸与密度 */
+  .admin-content .el-button {
+    min-height: 32px;
+    padding: 0 12px;
+  }
+  .admin-content .el-button--small {
+    min-height: 30px;
+  }
+  .perm-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .stat-card {
+    padding: 12px;
+  }
+  .stat-card__value {
+    font-size: 20px;
+  }
+  .mm-inline-label {
+    width: 68px;
+    font-size: 12px;
+  }
+  .upload-drop {
+    padding: 30px 16px;
+  }
+  .upload-drop__icon {
+    font-size: 36px;
+  }
+  .stage-track {
+    font-size: 10px;
+  }
+  .stage-node::before {
+    margin: 0 4px 6px;
+  }
+  .chunk-cell {
+    width: 8px;
+    height: 8px;
+  }
+  .login-page {
+    padding: 16px;
+  }
+  .login-box {
+    padding: 26px 20px 22px;
+  }
+}
+
+/* 尊重系统的「减少动态效果」 */
+@media (prefers-reduced-motion: reduce) {
+  .admin-side,
+  .admin-main,
+  .bar-col__bar,
+  .v-card,
+  .v-card__cover img,
+  .chunk-cell--cur {
+    transition: none !important;
+    animation: none !important;
+  }
 }

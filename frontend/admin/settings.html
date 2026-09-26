@@ -37,7 +37,7 @@
             <el-button size="small" @click="load">刷新</el-button>
           </div>
           <div class="mm-card__body">
-            <el-descriptions :column="2" border size="small">
+            <el-descriptions :column="mmIsMobile ? 1 : 2" border size="small">
               <el-descriptions-item label="应用名称">{{ sys.app.name }}</el-descriptions-item>
               <el-descriptions-item label="版本">{{ sys.app.version }}</el-descriptions-item>
               <el-descriptions-item label="时区">{{ sys.app.timezone }}</el-descriptions-item>
@@ -45,7 +45,7 @@
                 <span class="mm-mono" style="font-size:11.5px">{{ sys.config_path }}</span>
               </el-descriptions-item>
 
-              <el-descriptions-item label="存储根目录" :span="2">
+              <el-descriptions-item label="存储根目录" :span="mmIsMobile ? 1 : 2">
                 <span class="mm-mono" style="font-size:11.5px">{{ sys.storage.root }}</span>
               </el-descriptions-item>
               <el-descriptions-item label="存储占用">{{ sys.storage.usage_text }}</el-descriptions-item>
@@ -64,7 +64,7 @@
               </el-descriptions-item>
               <el-descriptions-item label="上报心跳间隔">{{ sys.business.heartbeat_interval }} 秒</el-descriptions-item>
 
-              <el-descriptions-item label="抽帧能力" :span="2">
+              <el-descriptions-item label="抽帧能力" :span="mmIsMobile ? 1 : 2">
                 <div class="mm-row mm-wrap" style="gap:6px">
                   <el-tag :type="sys.media_backend.av ? 'success' : 'info'" size="small">
                     PyAV {{ sys.media_backend.av ? '可用' : '未安装' }}
@@ -95,7 +95,8 @@
         <div class="mm-card mm-mt-16">
           <div class="mm-card__head">
             <span class="mm-card__title">
-              <el-icon><Link /></el-icon>入口地址
+              <!-- Link 与 HTML 原生标签同名，必须走动态解析 -->
+              <el-icon><component :is="'Link'" /></el-icon>入口地址
             </span>
           </div>
           <div class="mm-card__body">

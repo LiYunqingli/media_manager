@@ -45,8 +45,8 @@
         </div>
       </div>
 
-      <!-- 表格 -->
-      <div class="mm-card" style="overflow:hidden">
+      <!-- 表格（桌面） -->
+      <div class="mm-card" style="overflow:hidden" v-if="!mmIsMobile">
         <el-table :data="list" v-loading="loading" stripe row-key="id">
           <el-table-column label="ID" width="66">
             <template #default="{ row }"><span class="mm-mono">#{{ row.id }}</span></template>
@@ -127,6 +127,77 @@
         </el-table>
       </div>
 
+      <!-- 卡片列表（手机） -->
+      <div v-else class="m-list" v-loading="loading">
+        <div v-if="!loading && !list.length" class="mm-card">
+          <div class="mm-card__body" style="text-align:center;padding:36px 14px">
+            <el-empty description="暂无用户" :image-size="70"></el-empty>
+            <el-button type="primary" @click="openCreate">新增用户</el-button>
+          </div>
+        </div>
+
+        <div v-for="row in list" :key="row.id" class="m-item">
+          <div class="m-item__main" @click="openPermissions(row)">
+            <div class="mm-avatar" style="width:44px;height:44px;font-size:16px">
+              <img v-if="row.avatar_url" :src="row.avatar_url" />
+              <span v-else>{{ (row.nickname || row.username).slice(0, 1).toUpperCase() }}</span>
+            </div>
+            <div class="m-item__body">
+              <div class="m-item__top">
+                <span class="m-item__title mm-ellipsis">{{ row.username }}</span>
+                <el-tag :type="row.role === 'admin' ? 'warning' : 'info'" size="small">
+                  {{ row.role === 'admin' ? '管理员' : '普通用户' }}
+                </el-tag>
+                <span class="mm-grow"></span>
+                <el-switch :model-value="row.status === 1" @click.stop
+                           @change="toggleStatus(row)"></el-switch>
+              </div>
+              <div class="m-item__sub mm-ellipsis">
+                {{ row.nickname || '—' }}<template v-if="row.remark"> · {{ row.remark }}</template>
+              </div>
+              <div v-if="row.role !== 'admin' && (ruleSummary(row).whitelist || ruleSummary(row).denyCats || ruleSummary(row).denyVideos || ruleSummary(row).allowVideos)"
+                   class="m-item__meta">
+                <span class="mm-tag" :class="ruleSummary(row).whitelist ? '' : 'mm-tag--muted'">
+                  {{ ruleSummary(row).whitelist ? '白名单 ' + ruleSummary(row).allowCats + ' 个分类' : '全部启用分类' }}
+                </span>
+                <span v-if="ruleSummary(row).denyCats" class="mm-tag mm-tag--danger">
+                  禁止 {{ ruleSummary(row).denyCats }} 个分类
+                </span>
+                <span v-if="ruleSummary(row).denyVideos" class="mm-tag mm-tag--danger">
+                  拉黑 {{ ruleSummary(row).denyVideos }} 个视频
+                </span>
+                <span v-if="ruleSummary(row).allowVideos" class="mm-tag mm-tag--success">
+                  单独放行 {{ ruleSummary(row).allowVideos }} 个
+                </span>
+              </div>
+              <div class="m-item__meta">
+                <span v-if="!row.status" class="mm-tag mm-tag--danger">已禁用</span>
+                <span>#{{ row.id }}</span>
+                <span>{{ row.last_login_at ? dateText(row.last_login_at) : '从未登录' }}</span>
+                <span v-if="row.last_login_ip">{{ row.last_login_ip }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="m-item__acts">
+            <el-button size="small" type="primary" plain @click="openPermissions(row)">权限</el-button>
+            <el-button size="small" @click="openEdit(row)">编辑</el-button>
+            <el-dropdown trigger="click">
+              <el-button size="small">
+                更多<el-icon><ArrowDown /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item @click="resetPassword(row)">重置密码</el-dropdown-item>
+                  <el-dropdown-item @click="toggleStatus(row)">{{ row.status ? '禁用账号' : '启用账号' }}</el-dropdown-item>
+                  <el-dropdown-item @click="clearRules(row)">清空权限规则</el-dropdown-item>
+                  <el-dropdown-item divided style="color:var(--danger)" @click="removeUser(row)">删除用户</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
+        </div>
+      </div>
+
       <div class="mm-pager">
         <span class="mm-pager__info">共 {{ total }} 条 / {{ pages }} 页</span>
         <el-pagination background layout="prev, pager, next" :total="total"
@@ -149,7 +220,7 @@
             <label class="mm-field__label">昵称</label>
             <el-input v-model.trim="form.nickname" maxlength="64"></el-input>
           </div>
-          <div class="mm-row" style="gap:14px">
+          <div class="mm-row mm-stack-sm" style="gap:14px">
             <div class="mm-field mm-grow">
               <label class="mm-field__label">角色</label>
               <el-select v-model="form.role" style="width:100%">
@@ -262,7 +333,7 @@
               </span>
             </div>
 
-            <el-table :data="pickVideos" v-loading="pickLoading" size="small" max-height="420" row-key="id">
+            <el-table v-if="!mmIsMobile" :data="pickVideos" v-loading="pickLoading" size="small" max-height="420" row-key="id">
               <el-table-column label="封面" width="86">
                 <template #default="{ row }">
                   <div class="file-thumb" style="width:70px">
@@ -293,6 +364,37 @@
                 </template>
               </el-table-column>
             </el-table>
+
+            <!-- 卡片列表（手机） -->
+            <div v-if="mmIsMobile" class="m-list" v-loading="pickLoading">
+              <div v-for="row in pickVideos" :key="row.id" class="m-item">
+                <div class="m-item__main">
+                  <div class="m-item__cover" style="width:88px">
+                    <img v-if="row.cover_url" :src="row.cover_url" alt="" />
+                    <div v-else class="v-card__placeholder" :style="{ background: grad(row.title), fontSize: 12 }">
+                      {{ initials(row.title) }}
+                    </div>
+                  </div>
+                  <div class="m-item__body">
+                    <div class="m-item__title mm-clamp-2">{{ row.title }}</div>
+                    <div class="m-item__sub mm-ellipsis">
+                      #{{ row.id }} · {{ row.category_name }} · {{ row.duration_text }}
+                    </div>
+                  </div>
+                </div>
+                <div class="m-item__acts">
+                  <el-radio-group size="small" :model-value="videoState(row.id)"
+                                  @change="(v) => setVideoRule(row.id, v)">
+                    <el-radio-button :label="1">放行</el-radio-button>
+                    <el-radio-button :label="-1">跟随分类</el-radio-button>
+                    <el-radio-button :label="0">禁止</el-radio-button>
+                  </el-radio-group>
+                </div>
+              </div>
+              <div v-if="!pickLoading && !pickVideos.length" class="mm-card">
+                <div class="mm-card__body mm-muted" style="text-align:center;padding:28px 14px">没有匹配的视频</div>
+              </div>
+            </div>
 
             <div class="mm-pager">
               <span class="mm-pager__info">共 {{ pickTotal }} 条</span>

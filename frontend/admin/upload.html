@@ -244,7 +244,7 @@
         <!-- 新建任务 -->
         <div class="mm-card mm-mt-16">
           <div class="mm-card__head">
-            <span class="mm-card__title"><el-icon><Link /></el-icon>手动新建下载任务</span>
+            <span class="mm-card__title"><el-icon><component :is="'Link'" /></el-icon>手动新建下载任务</span>
             <span class="mm-muted" style="font-size:12px">
               下载并发 {{ tools.max_concurrent || 2 }} · 运行中 {{ tools.active || 0 }}
               <template v-if="tools.api_token_enabled"> · 已开启插件接口令牌</template>

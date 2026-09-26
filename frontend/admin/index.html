@@ -42,7 +42,9 @@
             <div class="stat-card__foot">管理员 {{ d.user.admin }} · 近 7 天活跃 {{ d.user.active_7d }}</div>
           </div>
           <div class="stat-card">
-            <div class="stat-card__label"><el-icon><View /></el-icon>播放总次数</div>
+            <!-- View/Link 与 SVG、HTML 原生标签同名，编译器会当成原生元素，
+                 只能走动态解析拿注册表里的图标 -->
+            <div class="stat-card__label"><el-icon><component :is="'View'" /></el-icon>播放总次数</div>
             <div class="stat-card__value">{{ fmt(d.play.total) }}<span class="stat-card__unit">次</span></div>
             <div class="stat-card__foot">今日新增 {{ d.play.today }} 次</div>
           </div>
@@ -133,7 +135,7 @@
               </span>
             </div>
             <div class="mm-card__body">
-              <el-descriptions :column="2" border size="small">
+              <el-descriptions :column="mmIsMobile ? 1 : 2" border size="small">
                 <el-descriptions-item label="媒体处理后端">
                   <el-tag v-if="d.system.media_backend.av" type="success" size="small">PyAV</el-tag>
                   <el-tag v-if="d.system.media_backend.cv2" type="success" size="small" style="margin-left:4px">OpenCV</el-tag>
@@ -144,7 +146,7 @@
                   </div>
                 </el-descriptions-item>
                 <el-descriptions-item label="分片大小">{{ fmtSize(d.system.chunk_size) }}</el-descriptions-item>
-                <el-descriptions-item label="存储目录" :span="2">
+                <el-descriptions-item label="存储目录" :span="mmIsMobile ? 1 : 2">
                   <span class="mm-mono" style="font-size:11.5px">{{ d.system.storage_root }}</span>
                 </el-descriptions-item>
                 <el-descriptions-item label="数据库连接池">
