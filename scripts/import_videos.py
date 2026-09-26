@@ -132,23 +132,51 @@ class Outcome:
 
 
 # ===========================================================================
-# 目录扫描
+# 路径扫描
 # ===========================================================================
+class ScanError(Exception):
+    """扫描阶段的参数/路径错误（调用方直接映射为退出码 2）。"""
+
+
 def collect_targets(
-    dirs: Iterable[Path],
+    paths: Iterable[Path],
     *,
     recursive: bool,
     exts: set[str],
     include_hidden: bool,
     limit: int,
 ) -> list[tuple[Path, Path]]:
-    """扫描目录，返回 ``[(文件绝对路径, 所属搜索根目录)]``（已去重、已排序）。"""
+    """把传入路径展开成 ``[(文件绝对路径, 所属搜索根目录)]``（已去重、已排序）。
+
+    每一项可以是**目录**（按 ``recursive`` 展开）或**单个文件**（直接采纳，
+    不受 ``recursive`` 影响）。单文件情况下「搜索根」取其父目录，于是
+    ``--category-from-subdir`` 对它恒等于「无子目录分类」，落到默认分类
+    —— 单个文件本来就谈不上按子目录归类。
+    """
     seen: set[Path] = set()
     targets: list[tuple[Path, Path]] = []
 
-    for root in dirs:
+    for root in paths:
+        # ---- 显式指定的单个文件：直接采纳（不做隐藏文件过滤，后缀仍校验） ----
+        if root.is_file():
+            if root.suffix.lower() not in exts:
+                raise ScanError(
+                    f"不是支持的视频扩展名: {root.name}"
+                    f"（允许 {', '.join(sorted(exts))}，可用 --ext 放宽）"
+                )
+            resolved = root.resolve()
+            if resolved not in seen:
+                seen.add(resolved)
+                targets.append((resolved, resolved.parent))
+                if limit and len(targets) >= limit:
+                    return targets
+            continue
+
+        if not root.exists():
+            raise ScanError(f"路径不存在: {root}")
         if not root.is_dir():
-            raise NotADirectoryError(f"不是目录: {root}")
+            raise ScanError(f"既不是文件也不是目录: {root}")
+
         walker = root.rglob("*") if recursive else root.glob("*")
         for item in sorted(walker, key=lambda p: str(p).lower()):
             if not item.is_file():
@@ -387,16 +415,19 @@ def normalize_ext(raw: Iterable[str]) -> set[str]:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="import_videos.py",
-        description="把指定目录下的视频批量导入 MediaManager（跳过分片上传）",
+        description="把指定目录（或单个文件）下的视频批量导入 MediaManager（跳过分片上传）",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "示例:\n"
             "  python scripts/import_videos.py D:/待导入 --category-name 电影 --dry-run\n"
             "  python scripts/import_videos.py D:/待导入 -r --category-name 电影\n"
             "  python scripts/import_videos.py D:/剧集 --category-from-subdir --mode move\n"
+            "  python scripts/import_videos.py E:/珠江.mp4 --category-id 10\n"
         ),
     )
-    parser.add_argument("dirs", nargs="+", metavar="目录", help="待导入的目录（可多个）")
+    parser.add_argument(
+        "paths", nargs="+", metavar="路径", help="待导入的目录或单个视频文件（可多个）"
+    )
     parser.add_argument("-r", "--recursive", action="store_true", help="递归子目录")
 
     group = parser.add_argument_group("分类")
@@ -506,7 +537,7 @@ def main(argv: list[str] | None = None) -> int:
 
     settings.ensure_dirs()
 
-    dirs = [Path(d).expanduser().resolve() for d in args.dirs]
+    paths = [Path(p).expanduser().resolve() for p in args.paths]
     exts = normalize_ext(args.ext) if args.ext else {
         e.lower() for e in (settings.get("storage.allow_video_ext", []) or [])
     }
@@ -534,19 +565,19 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         targets = collect_targets(
-            dirs,
+            paths,
             recursive=args.recursive,
             exts=exts,
             include_hidden=args.include_hidden,
             limit=args.limit,
         )
-    except NotADirectoryError as exc:
+    except ScanError as exc:
         emit(f"⚠️ {exc}")
         return 2
 
     mode_text = {"copy": "复制", "move": "移动", "link": "硬链接"}[args.mode]
     if not args.json_out:
-        emit(f"扫描     : {', '.join(str(d) for d in dirs)}"
+        emit(f"扫描     : {', '.join(str(p) for p in paths)}"
              f"（递归={args.recursive}, 扩展名={','.join(sorted(exts))}）")
         emit(f"搬运方式 : {mode_text}  并发={args.jobs}\n")
 
@@ -578,7 +609,18 @@ def main(argv: list[str] | None = None) -> int:
                 f"{cat:<12} {container:<8} {path.name}{warn}"
             )
         emit("\n（--dry-run：以上文件未被导入）")
+        if not (args.category_id or args.category_name or args.category_from_subdir):
+            emit("⚠️ 未指定分类：正式导入需要 --category-id 或 --category-name"
+                 "（或 --category-from-subdir 按子目录自动建分类）")
         return 0
+
+    # ---- 正式导入必须有分类 ----
+    # 与其让每个文件各失败一次（最后还配一句「已入库」的误导提示），不如开跑前一次说清。
+    # --dry-run 不写库，允许不给分类（上方分类列会显示「未指定」）。
+    if not (args.category_id or args.category_name):
+        emit("⚠️ 未指定分类：请用 --category-id N 或 --category-name 名称"
+             "（想按子目录自动建分类则加 --category-from-subdir）")
+        return 2
 
     try:
         default_cid = resolve_default_category(args)
@@ -643,13 +685,24 @@ def main(argv: list[str] | None = None) -> int:
         emit(f"完成：成功 {len(imported)} | 跳过 {len(skipped)} | 失败 {len(failed)}"
              f"（共 {total} 个，耗时 {elapsed:.1f}s）")
         emitted_bytes = sum(r.size for r in imported)
-        emit(f"入库体积：{file_utils.human_size(emitted_bytes)}")
+        if imported:
+            emit(f"入库体积：{file_utils.human_size(emitted_bytes)}")
         if failed:
             emit("\n⚠️ 失败清单：")
             for r in failed:
                 emit(f"  - {r.path}：{r.detail}")
         emit("=" * 68)
-        emit("提示：视频已入库，管理端刷新即可看到。")
+        # 提示必须跟着实际结果走：全失败时说「已入库」是在骗人。
+        if not imported:
+            if failed:
+                emit("提示：没有任何视频入库，请按上方失败原因修正后重跑。")
+            else:
+                emit("提示：这些视频此前都已导入过，未新增记录。")
+        elif failed:
+            emit(f"提示：{len(imported)} 个已入库（另有 {len(failed)} 个失败，见上方清单），"
+                 "管理端刷新即可看到成功的部分。")
+        else:
+            emit(f"提示：{len(imported)} 个视频已入库，管理端刷新即可看到。")
 
     return 1 if failed else 0
 
