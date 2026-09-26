@@ -42,6 +42,7 @@ class ErrorCode(IntEnum):
     VIDEO_NOT_FOUND = 4004
     UPLOAD_NOT_FOUND = 4005
     FILE_NOT_FOUND = 4006
+    DOWNLOAD_NOT_FOUND = 4007
 
     # 5xxx 业务
     CATEGORY_NAME_EXISTS = 5001
@@ -53,6 +54,10 @@ class ErrorCode(IntEnum):
     FILE_TOO_LARGE = 5007
     ALREADY_FAVORITED = 5008
     MEDIA_PROBE_FAILED = 5009
+    DOWNLOAD_DISABLED = 5010
+    DOWNLOAD_TOOL_MISSING = 5011
+    DOWNLOAD_FAILED = 5012
+    DOWNLOAD_BUSY = 5013
 
     # 9xxx 系统
     INTERNAL_ERROR = 9001
@@ -82,6 +87,7 @@ _HTTP_STATUS: dict[int, int] = {
     ErrorCode.VIDEO_NOT_FOUND: 404,
     ErrorCode.UPLOAD_NOT_FOUND: 404,
     ErrorCode.FILE_NOT_FOUND: 404,
+    ErrorCode.DOWNLOAD_NOT_FOUND: 404,
     ErrorCode.CATEGORY_NAME_EXISTS: 409,
     ErrorCode.CATEGORY_NOT_EMPTY: 409,
     ErrorCode.UPLOAD_CHUNK_INVALID: 400,
@@ -91,6 +97,10 @@ _HTTP_STATUS: dict[int, int] = {
     ErrorCode.FILE_TOO_LARGE: 413,
     ErrorCode.ALREADY_FAVORITED: 409,
     ErrorCode.MEDIA_PROBE_FAILED: 500,
+    ErrorCode.DOWNLOAD_DISABLED: 403,
+    ErrorCode.DOWNLOAD_TOOL_MISSING: 503,
+    ErrorCode.DOWNLOAD_FAILED: 500,
+    ErrorCode.DOWNLOAD_BUSY: 409,
     ErrorCode.INTERNAL_ERROR: 500,
     ErrorCode.DATABASE_ERROR: 500,
     ErrorCode.CONFIG_ERROR: 500,
@@ -140,6 +150,7 @@ _MESSAGES: dict[int, str] = {
     ErrorCode.VIDEO_NOT_FOUND: "视频不存在",
     ErrorCode.UPLOAD_NOT_FOUND: "上传会话不存在或已过期",
     ErrorCode.FILE_NOT_FOUND: "文件不存在",
+    ErrorCode.DOWNLOAD_NOT_FOUND: "下载任务不存在",
     ErrorCode.CATEGORY_NAME_EXISTS: "分类名称已存在",
     ErrorCode.CATEGORY_NOT_EMPTY: "分类下仍有视频，无法删除",
     ErrorCode.UPLOAD_CHUNK_INVALID: "分片数据非法",
@@ -149,6 +160,10 @@ _MESSAGES: dict[int, str] = {
     ErrorCode.FILE_TOO_LARGE: "文件超过大小限制",
     ErrorCode.ALREADY_FAVORITED: "已经收藏过了",
     ErrorCode.MEDIA_PROBE_FAILED: "媒体信息解析失败",
+    ErrorCode.DOWNLOAD_DISABLED: "m3u8 下载导入功能已关闭",
+    ErrorCode.DOWNLOAD_TOOL_MISSING: "下载工具未就绪（缺少 N_m3u8DL-RE）",
+    ErrorCode.DOWNLOAD_FAILED: "下载失败",
+    ErrorCode.DOWNLOAD_BUSY: "任务正在运行，无法执行该操作",
     ErrorCode.INTERNAL_ERROR: "服务器内部错误",
     ErrorCode.DATABASE_ERROR: "数据库操作失败",
     ErrorCode.CONFIG_ERROR: "配置错误",

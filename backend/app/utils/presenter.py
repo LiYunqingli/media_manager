@@ -213,3 +213,59 @@ def present_upload(row: dict[str, Any], *, uploaded_indexes: list[int] | None = 
         "updated_at": row.get("updated_at"),
         "uploaded_indexes": uploaded_indexes or [],
     }
+
+
+# --------------------------------------------------------------------------- #
+# m3u8 下载任务
+# --------------------------------------------------------------------------- #
+DOWNLOAD_STAGE_TEXT = {
+    "queued": "排队中",
+    "downloading": "下载中",
+    "muxing": "混流封装",
+    "ingesting": "处理文件",
+    "probing": "解析信息",
+    "covering": "生成封面",
+    "finished": "已完成",
+    "failed": "失败",
+    "cancelled": "已取消",
+}
+
+
+def present_download(row: dict[str, Any]) -> dict[str, Any]:
+    """m3u8 下载任务出参（前端进度卡与插件回调共用）。"""
+    stage = row.get("stage") or "queued"
+    cover = row.get("cover") or ""
+    eta = int(row.get("eta") or 0)
+    return {
+        "task_id": row.get("task_id") or "",
+        "source": row.get("source") or "admin",
+        "url": row.get("url") or "",
+        "title": row.get("title") or "",
+        "cover_url": row.get("cover_url") or "",
+        "cover": cover,
+        "cover_preview": build_media_url(cover),
+        "category_id": int(row.get("category_id") or 0),
+        "description": row.get("description") or "",
+        "sort": int(row.get("sort") or 0),
+        "stage": stage,
+        "stage_text": DOWNLOAD_STAGE_TEXT.get(stage, stage),
+        "percent": round(float(row.get("percent") or 0), 2),
+        "total_bytes": int(row.get("total_bytes") or 0),
+        "total_bytes_text": human_size(row.get("total_bytes") or 0),
+        "done_bytes": int(row.get("done_bytes") or 0),
+        "done_bytes_text": human_size(row.get("done_bytes") or 0),
+        "speed": int(row.get("speed") or 0),
+        "speed_text": f"{human_size(row.get('speed') or 0)}/s",
+        "eta": eta,
+        "eta_text": format_duration(eta) if eta else "",
+        "video_id": int(row.get("video_id") or 0),
+        "file_path": row.get("file_path") or "",
+        "message": row.get("message") or "",
+        "error": row.get("error") or "",
+        "log_tail": row.get("log_tail") or "",
+        "elapsed": round(float(row.get("elapsed") or 0), 2),
+        "created_at": row.get("created_at"),
+        "started_at": row.get("started_at"),
+        "finished_at": row.get("finished_at"),
+        "updated_at": row.get("updated_at"),
+    }

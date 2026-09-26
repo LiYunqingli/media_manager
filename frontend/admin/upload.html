@@ -24,6 +24,9 @@
   <div id="app" v-cloak>
     <admin-shell title="上传视频" crumb="内容 / 上传视频" active="upload">
 
+      <el-tabs v-model="tab" style="margin-bottom:12px" @tab-change="onTabChange">
+      <el-tab-pane label="分片上传（本地文件）" name="chunk">
+
       <!-- ===================== 上传区 ===================== -->
       <div class="toolbar">
         <span class="toolbar__title">
@@ -223,6 +226,185 @@
         </div>
       </div>
 
+      </el-tab-pane>
+
+      <!-- ===================== m3u8 链接下载 ===================== -->
+      <el-tab-pane label="m3u8 链接下载" name="m3u8">
+
+        <!-- 工具链状态 -->
+        <el-alert v-if="toolsLoaded && !tools.binary_ready" type="error" :closable="false" show-icon
+                  title="下载工具未就绪：缺少 N_m3u8DL-RE"
+                  :description="tools.hint || '请在项目根目录执行：python scripts/fetch_tools.py'"></el-alert>
+        <el-alert v-else-if="toolsLoaded && !tools.ffmpeg_ready" type="warning" :closable="false" show-icon
+                  title="未检测到 ffmpeg，无法混流"
+                  description="遇到「视频轨 + 音频轨分离」的 HLS 会下载失败。解决办法：执行 python scripts/fetch_tools.py 下载内置 ffmpeg。"></el-alert>
+        <el-alert v-else-if="toolsLoaded && !tools.enabled" type="warning" :closable="false" show-icon
+                  title="该功能已在 config.yaml 中关闭（download.enabled=false）"></el-alert>
+
+        <!-- 新建任务 -->
+        <div class="mm-card mm-mt-16">
+          <div class="mm-card__head">
+            <span class="mm-card__title"><el-icon><Link /></el-icon>手动新建下载任务</span>
+            <span class="mm-muted" style="font-size:12px">
+              下载并发 {{ tools.max_concurrent || 2 }} · 运行中 {{ tools.active || 0 }}
+              <template v-if="tools.api_token_enabled"> · 已开启插件接口令牌</template>
+            </span>
+          </div>
+          <div class="mm-card__body">
+            <div class="mm-field">
+              <label class="mm-field__label">m3u8 链接 *</label>
+              <input class="mm-input" v-model.trim="dlForm.url" placeholder="https://example.com/hls/index.m3u8"
+                     @keyup.enter="submitDownload" />
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-top:12px">
+              <div class="mm-field">
+                <label class="mm-field__label">视频名称</label>
+                <input class="mm-input" v-model.trim="dlForm.title" placeholder="留空则用链接末段文件名" />
+              </div>
+              <div class="mm-field">
+                <label class="mm-field__label">所属分类 *</label>
+                <select class="mm-select" v-model.number="dlForm.categoryId">
+                  <option :value="0">请选择分类</option>
+                  <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+                </select>
+              </div>
+              <div class="mm-field">
+                <label class="mm-field__label">封面地址（可选）</label>
+                <input class="mm-input" v-model.trim="dlForm.coverUrl" placeholder="https://example.com/poster.jpg" />
+              </div>
+            </div>
+
+            <div class="mm-field" style="margin-top:12px">
+              <label class="mm-field__label">简介</label>
+              <textarea class="mm-textarea" v-model="dlForm.description" placeholder="选填"></textarea>
+            </div>
+
+            <div class="mm-field" style="margin-top:12px">
+              <label class="mm-field__label">附加请求头（可选，每行一条 <code>Key: Value</code>）</label>
+              <textarea class="mm-textarea" v-model="dlForm.headers" rows="3"
+                        placeholder="Referer: https://example.com/&#10;Cookie: uid=123; token=abc&#10;User-Agent: Mozilla/5.0"></textarea>
+            </div>
+
+            <div class="mm-row mm-wrap" style="margin-top:14px">
+              <el-button type="primary" :disabled="!canSubmitDownload" @click="submitDownload">
+                <el-icon><Download /></el-icon>开始下载并入库
+              </el-button>
+              <el-checkbox v-model="dlForm.force">同链接已下载过时重新下载</el-checkbox>
+              <span class="mm-grow"></span>
+              <el-button @click="resetDlForm">清空表单</el-button>
+              <el-button @click="loadDownloadTasks">刷新列表</el-button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 任务列表 -->
+        <div v-if="dlTasks.length" class="mm-row mm-row--between mm-mt-16" style="margin-bottom:10px">
+          <div class="mm-row">
+            <span style="font-size:14px;font-weight:600">下载任务（{{ dlTasks.length }}）</span>
+            <span class="mm-muted" style="font-size:12.5px">
+              已完成 {{ dlStats.finished || 0 }} · 进行中 {{ dlStats.running || 0 }} · 失败 {{ dlStats.failed || 0 }}
+            </span>
+          </div>
+          <div class="mm-row">
+            <el-button size="small" @click="loadDownloadTasks">刷新</el-button>
+            <el-button size="small" @click="cleanupDownloads">清理 7 天前的失败任务</el-button>
+          </div>
+        </div>
+
+        <div v-for="t in dlTasks" :key="t.task_id" class="upload-item">
+          <div class="upload-item__head">
+            <span class="mm-tag" :class="dlTagClass(t.stage)">{{ t.stage_text }}</span>
+            <span class="upload-item__name mm-ellipsis" :title="t.title">{{ t.title || t.url }}</span>
+            <span class="upload-item__size">{{ t.total_bytes ? t.total_bytes_text : '' }}</span>
+            <span class="mm-muted" style="font-size:11.5px">{{ dlPercentText(t) }}</span>
+          </div>
+
+          <div class="stage-track">
+            <div v-for="(s, si) in dlStages" :key="s"
+                 class="stage-node"
+                 :class="{
+                   'stage-node--active': dlStageIndex(t.stage) === si && t.stage !== 'failed' && t.stage !== 'cancelled',
+                   'stage-node--done': dlStageIndex(t.stage) > si || t.stage === 'finished',
+                   'stage-node--failed': (t.stage === 'failed' || t.stage === 'cancelled') && dlStageIndex(t.stage) === si
+                 }">{{ s }}</div>
+          </div>
+
+          <el-progress :percentage="Math.min(100, Number(t.percent) || 0)"
+                       :status="t.stage === 'failed' ? 'exception' : t.stage === 'finished' ? 'success' : ''"
+                       :stroke-width="10"></el-progress>
+
+          <div class="upload-meta" style="margin-top:8px">
+            <span>整体进度：<b>{{ (Number(t.percent) || 0).toFixed(1) }}%</b></span>
+            <span v-if="t.done_bytes">已下载：<b>{{ t.done_bytes_text }}</b>
+              <template v-if="t.total_bytes"> / {{ t.total_bytes_text }}</template>
+            </span>
+            <span v-if="t.speed">速度：<b>{{ t.speed_text }}</b></span>
+            <span v-if="t.eta">剩余：<b>{{ t.eta_text }}</b></span>
+            <span v-if="t.video_id">视频ID：<b>#{{ t.video_id }}</b></span>
+            <span v-if="t.elapsed">耗时：<b>{{ t.elapsed }}s</b></span>
+            <span>{{ t.message }}</span>
+          </div>
+
+          <div class="mm-muted mm-ellipsis" style="font-size:11.5px;margin-top:6px" :title="t.url">
+            来源：{{ t.url }}<template v-if="t.source === 'api'">（插件/接口投递）</template>
+          </div>
+
+          <el-alert v-if="t.stage === 'failed'" :title="t.error || '下载失败'" type="error"
+                    :closable="false" show-icon style="margin-top:10px"></el-alert>
+
+          <div class="mm-row mm-wrap" style="margin-top:12px">
+            <template v-if="dlActiveStages.indexOf(t.stage) >= 0">
+              <el-button size="small" type="danger" plain @click="cancelDownload(t)">取消</el-button>
+            </template>
+            <template v-else>
+              <el-button size="small" type="primary" @click="retryDownload(t)">重新下载</el-button>
+              <el-button size="small" type="danger" plain @click="removeDownload(t)">删除记录</el-button>
+              <el-button v-if="t.video_id" size="small" type="success" @click="goVideos">查看视频库</el-button>
+            </template>
+            <span class="mm-muted" style="font-size:11.5px">{{ dateText(t.created_at) }}</span>
+          </div>
+        </div>
+
+        <div v-if="!dlTasks.length" class="mm-card mm-mt-16">
+          <div class="mm-card__body mm-muted" style="text-align:center;padding:32px 14px">
+            还没有下载任务。粘贴一个 m3u8 链接即可开始。
+          </div>
+        </div>
+
+        <!-- 说明 -->
+        <div class="mm-card mm-mt-16">
+          <div class="mm-card__head">
+            <span class="mm-card__title"><el-icon><InfoFilled /></el-icon>m3u8 下载导入说明</span>
+          </div>
+          <div class="mm-card__body" style="font-size:13px;color:var(--text-2);line-height:1.85">
+            <p style="margin:0 0 6px">
+              <b>① 下载</b>：服务端调用 <code>N_m3u8DL-RE</code> 把播放列表下载为完整媒体文件，
+              自动并发拉取分片、失败重试。
+            </p>
+            <p style="margin:0 0 6px">
+              <b>② 混流</b>：HLS 常见的「视频轨 + 音频轨」分离播放列表由 ffmpeg 混流成 MP4；
+              单轨 TS 播放列表下载后也会在入库时自动转封装。
+            </p>
+            <p style="margin:0 0 6px">
+              <b>③ 入库</b>：与分片上传走<b>同一段</b>入库逻辑 —— 容器校验、时长/分辨率探测、
+              封面抽帧全部一致。填了封面地址则优先使用远程封面（封面来源记为手动）。
+            </p>
+            <p style="margin:0 0 6px">
+              <b>④ 判重</b>：同一个链接成功后再次提交会直接复用既有任务，
+              想重下勾选「重新下载」。
+            </p>
+            <p style="margin:0">
+              <b>浏览器插件</b>：在 <code>config.yaml</code> 里设置 <code>download.api_token</code> 后，
+              插件带 <code>X-API-Token</code> 请求头即可免登录投递任务，接口见
+              <code>doc/03-API接口文档.md</code> 的「m3u8 下载」章节。
+            </p>
+          </div>
+        </div>
+
+      </el-tab-pane>
+      </el-tabs>
+
     </admin-shell>
   </div>
 
@@ -255,7 +437,18 @@
             chunkSizeText: '5 MB',
             allowExt: ['.mp4', '.mkv', '.mov', '.webm', '.avi', '.flv', '.ts', '.m4v', '.wmv'],
             stages: ['已分配', '分片上传', '合并', '解析信息', '生成封面', '完成'],
-            uidSeed: 1
+            uidSeed: 1,
+
+            /* ---------------- m3u8 下载导入 ---------------- */
+            tab: 'chunk',
+            tools: {},
+            toolsLoaded: false,
+            dlTasks: [],
+            dlStats: {},
+            dlStages: ['排队', '下载中', '混流', '入库', '完成'],
+            dlActiveStages: ['queued', 'downloading', 'muxing', 'ingesting', 'probing', 'covering'],
+            dlForm: { url: '', title: '', coverUrl: '', categoryId: 0, description: '', headers: '', force: false },
+            dlTimer: null
           };
         },
         computed: {
@@ -272,11 +465,19 @@
               else if (t.started) s.running++;
             });
             return s;
+          },
+          canSubmitDownload: function () {
+            return !!this.dlForm.url && !!this.dlForm.categoryId && this.tools.binary_ready !== false;
           }
         },
         mounted: function () {
           this.loadCategories();
           this.loadSessions();
+          this.loadTools();
+          this.loadDownloadTasks();
+        },
+        unmounted: function () {
+          this.stopDlPolling();
         },
         methods: {
           /* ---------------- 基础数据 ---------------- */
@@ -288,6 +489,10 @@
                 self.categories = list || [];
                 if (!self.defaultCategory && self.categories.length) {
                   self.defaultCategory = self.categories[0].id;
+                }
+                // m3u8 下载的分类是必填项，默认选中第一个分类省一次点击
+                if (!self.dlForm.categoryId && self.categories.length) {
+                  self.dlForm.categoryId = self.categories[0].id;
                 }
               })
               .catch(function (err) {
@@ -550,6 +755,200 @@
           },
           dateText: function (t) {
             return util.formatDate(t, true);
+          },
+
+          /* ================================================================
+             m3u8 链接下载导入
+             ================================================================ */
+          onTabChange: function (name) {
+            if (name === 'm3u8') {
+              this.loadTools();
+              this.loadDownloadTasks();
+              this.startDlPolling();
+            } else {
+              this.stopDlPolling();
+            }
+          },
+          loadTools: function () {
+            var self = this;
+            MM.http
+              .get('/admin/download/tools')
+              .then(function (res) {
+                self.tools = res || {};
+                self.toolsLoaded = true;
+              })
+              .catch(function () {
+                self.toolsLoaded = true;
+              });
+          },
+          loadDownloadTasks: function () {
+            var self = this;
+            return MM.http
+              .get('/admin/download/tasks', { limit: 30 })
+              .then(function (res) {
+                self.dlTasks = (res && res.items) || [];
+                self.dlStats = (res && res.stats) || {};
+                if (self.dlTasks.some(function (t) { return self.dlActiveStages.indexOf(t.stage) >= 0; })) {
+                  self.startDlPolling();
+                } else {
+                  self.stopDlPolling();
+                }
+              })
+              .catch(function (err) {
+                MM.log('加载下载任务失败', err);
+              });
+          },
+          startDlPolling: function () {
+            var self = this;
+            if (this.dlTimer) return;
+            this.dlTimer = setInterval(function () {
+              if (self.tab !== 'm3u8') return;
+              self.loadDownloadTasks();
+            }, 1500);
+          },
+          stopDlPolling: function () {
+            if (this.dlTimer) {
+              clearInterval(this.dlTimer);
+              this.dlTimer = null;
+            }
+          },
+          resetDlForm: function () {
+            this.dlForm = {
+              url: '',
+              title: '',
+              coverUrl: '',
+              categoryId: this.defaultCategory || 0,
+              description: '',
+              headers: '',
+              force: false
+            };
+          },
+          submitDownload: function () {
+            var self = this;
+            if (!this.canSubmitDownload) {
+              MM.ui.warning(!this.dlForm.url ? '请先填写 m3u8 链接' : '请先选择视频分类');
+              return;
+            }
+            var payload = {
+              url: this.dlForm.url,
+              title: this.dlForm.title,
+              cover_url: this.dlForm.coverUrl,
+              category_id: Number(this.dlForm.categoryId) || 0,
+              description: this.dlForm.description,
+              headers: this.parseHeaderText(this.dlForm.headers),
+              force: !!this.dlForm.force
+            };
+            MM.http
+              .post('/admin/download/m3u8', payload)
+              .then(function (res) {
+                MM.vant.toast(res.deduped ? '该链接已下载过，展示既有任务' : '已加入下载队列', 'success');
+                self.tab = 'm3u8';
+                self.loadDownloadTasks();
+                self.startDlPolling();
+                self.dlForm.url = '';
+                self.dlForm.title = '';
+                self.dlForm.coverUrl = '';
+                self.dlForm.force = false;
+              })
+              .catch(function (err) {
+                MM.http.toastError(err);
+                self.loadTools();
+              });
+          },
+          /** "Key: Value" 多行文本 -> 对象；空行/无冒号行忽略 */
+          parseHeaderText: function (text) {
+            var result = {};
+            String(text || '')
+              .split('\n')
+              .forEach(function (line) {
+                var idx = line.indexOf(':');
+                if (idx <= 0) return;
+                var key = line.slice(0, idx).trim();
+                var value = line.slice(idx + 1).trim();
+                if (key && value) result[key] = value;
+              });
+            return result;
+          },
+          cancelDownload: function (task) {
+            var self = this;
+            MM.vant.confirm('确定取消「' + (task.title || '该任务') + '」的下载？已下载的分片会被丢弃。').then(function () {
+              MM.http
+                .post('/admin/download/tasks/' + task.task_id + '/cancel')
+                .then(function () {
+                  MM.vant.toast('已取消');
+                  self.loadDownloadTasks();
+                })
+                .catch(function (err) {
+                  MM.http.toastError(err);
+                });
+            });
+          },
+          retryDownload: function (task) {
+            var self = this;
+            MM.http
+              .post('/admin/download/tasks/' + task.task_id + '/retry')
+              .then(function () {
+                MM.vant.toast('已重新入队', 'success');
+                self.loadDownloadTasks();
+                self.startDlPolling();
+              })
+              .catch(function (err) {
+                MM.http.toastError(err);
+              });
+          },
+          removeDownload: function (task) {
+            var self = this;
+            MM.vant.confirm('删除任务记录？（已入库的视频不会被删除）').then(function () {
+              MM.http
+                .del('/admin/download/tasks/' + task.task_id)
+                .then(function () {
+                  MM.vant.toast('已删除');
+                  self.loadDownloadTasks();
+                })
+                .catch(function (err) {
+                  MM.http.toastError(err);
+                });
+            });
+          },
+          cleanupDownloads: function () {
+            var self = this;
+            MM.http
+              .post('/admin/download/tasks/cleanup')
+              .then(function (res) {
+                MM.vant.toast('已清理 ' + ((res && res.cleaned) || 0) + ' 条');
+                self.loadDownloadTasks();
+              })
+              .catch(function (err) {
+                MM.http.toastError(err);
+              });
+          },
+          dlStageIndex: function (stage) {
+            var map = {
+              queued: 0,
+              downloading: 1,
+              muxing: 2,
+              ingesting: 3,
+              probing: 3,
+              covering: 3,
+              finished: 4,
+              failed: 1,
+              cancelled: 0
+            };
+            return map[stage] === undefined ? 0 : map[stage];
+          },
+          dlPercentText: function (task) {
+            if (task.stage === 'finished') return '已完成';
+            if (task.stage === 'cancelled') return '已取消';
+            if (task.stage === 'failed') return '失败';
+            if (task.stage === 'queued') return '排队中';
+            return (Number(task.percent) || 0).toFixed(1) + '%';
+          },
+          dlTagClass: function (stage) {
+            if (stage === 'finished') return 'mm-tag--success';
+            if (stage === 'failed') return 'mm-tag--danger';
+            if (stage === 'cancelled') return 'mm-tag--muted';
+            if (stage === 'downloading' || stage === 'muxing') return 'mm-tag--warning';
+            return '';
           }
         }
       });

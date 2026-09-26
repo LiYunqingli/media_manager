@@ -48,6 +48,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         get_pool()  # 预热数据库连接池，尽早暴露配置错误
     except Exception as exc:  # noqa: BLE001
         logger.error("数据库连接失败，请检查 config.yaml 中的 database 配置: %s", exc)
+    try:
+        # 上次进程被杀时留下的「下载中」任务不会自己复活，启动时统一判为中断，
+        # 否则前端会永远显示它们在跑。
+        from app.services import download_service
+
+        download_service.mark_interrupted()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("清理中断的 m3u8 下载任务失败: %s", exc)
     logger.info("管理端: http://%s:%s/admin/", settings.get("app.host"), settings.get("app.port"))
     logger.info("用户端: http://%s:%s/", settings.get("app.host"), settings.get("app.port"))
     logger.info("API 文档: http://%s:%s/docs", settings.get("app.host"), settings.get("app.port"))

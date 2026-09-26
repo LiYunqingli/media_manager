@@ -34,6 +34,18 @@ def find_many_by_ids(user_ids: list[int]) -> list[dict[str, Any]]:
     return rows
 
 
+def find_first_admin() -> dict[str, Any] | None:
+    """取第一个可用管理员。
+
+    用于「没有登录态、但需要给操作找个归属用户」的场景，典型是浏览器插件用
+    ``X-API-Token`` 调用下载接口（见 app/api/deps.py 的 DownloadOperator）。
+    """
+    return db.query_one(
+        f"SELECT {_SAFE_COLUMNS} FROM sys_user "
+        f"WHERE role = 'admin' AND status = 1 ORDER BY id ASC LIMIT 1"
+    )
+
+
 def list_users(
     *,
     page: int,

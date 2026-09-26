@@ -242,6 +242,11 @@ config/*.local.yaml
 # 默认入库以保证离线可用；若嫌体积大可取消下一行注释。
 # frontend/static/vendor/
 
+# 外部二进制工具（N_m3u8DL-RE / ffmpeg，上百 MB），由 scripts/fetch_tools.py 重新获取。
+# 保留 manifest.json（版本与校验值），便于核对本机装的是哪个版本。
+tools/*
+!tools/manifest.json
+
 # WorkBuddy 工作目录（记忆、会话数据等本地工作状态，不入库）
 .workbuddy/
 

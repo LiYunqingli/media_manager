@@ -53,6 +53,10 @@ Authorization: Bearer <token>
 令牌默认有效期 7 天（`security.token_expire_minutes`）。**每次请求都会查库确认账号状态**，
 因此管理员改权限、禁用账号会立即生效，无需等令牌过期。
 
+**例外**：m3u8 下载接口（§4.7）额外支持**接口令牌**——请求头带
+`X-API-Token: <download.api_token>` 即可免登录调用，专供浏览器插件/脚本。
+校验用常量时间比较；令牌为空时该通道关闭，只能走 JWT。
+
 ### 1.4 错误码表
 
 | code | 含义 | 典型场景 |
@@ -76,6 +80,7 @@ Authorization: Bearer <token>
 | 4004 | 视频不存在 | — |
 | 4005 | 上传会话不存在或已过期 | — |
 | 4006 | 文件不存在 | 磁盘文件被移动/删除 |
+| 4007 | 下载任务不存在 | — |
 | 5001 | 分类名称已存在 | — |
 | 5002 | 分类下仍有视频 | 需 `force=true` 强制删除 |
 | 5003 | 分片数据非法 | 序号越界、大小超限、MD5 校验失败 |
@@ -83,6 +88,10 @@ Authorization: Bearer <token>
 | 5005 | 分片未上传完整 | 缺失分片 |
 | 5006 | 不支持的文件类型 | 扩展名不在白名单 |
 | 5007 | 文件超过大小限制 | `storage.max_file_size` |
+| 5010 | m3u8 下载功能已关闭 | `download.enabled: false` |
+| 5011 | 下载工具未就绪 | 缺少 `N_m3u8DL-RE`，见 [11](./11-m3u8下载导入.md) |
+| 5012 | 下载失败 | 链接失效、源站拒绝、进程异常退出 |
+| 5013 | 任务正在运行 | 对运行中任务做取消/重试等非法操作 |
 | 9001 | 服务器内部错误 | 未捕获异常 |
 | 9002 | 数据库操作失败 | SQL 异常、连接池耗尽 |
 | 9003 | 配置错误 | 缺少必填配置项 |
@@ -588,6 +597,169 @@ POST /api/admin/upload/image      (multipart/form-data)
 ```json
 { "path": "covers/2026/09/cover_20260926_ab12.jpg", "url": "/media/covers/...", "size": 20480, "size_text": "20.00 KB" }
 ```
+
+### 4.7 m3u8 链接下载导入 ⭐
+
+> 不传文件、只传链接：服务端调 `N_m3u8DL-RE` 下载并混流成 mp4，再走
+> `ingest_service.ingest_file()` 入库（与分片上传完全同一条链路）。
+> 完整说明见 [11 · m3u8 下载导入](./11-m3u8下载导入.md)。
+
+**鉴权**：管理员 JWT **或** `X-API-Token` 接口令牌，二选一。
+后者在 `config.yaml` 的 `download.api_token` 里配置，插件只带请求头即可免登录：
+
+```
+X-API-Token: <download.api_token>
+```
+
+令牌调用产生的任务 `source="api"`，其余为 `"admin"`。
+
+#### ① 工具链状态
+
+```
+GET /api/admin/download/tools
+```
+
+```json
+{
+  "enabled": true,
+  "m3u8": { "ready": true, "path": "tools/N_m3u8DL-RE/N_m3u8DL-RE.exe", "version": "0.6.0+df70f0b3" },
+  "ffmpeg": { "ready": true, "path": "tools/ffmpeg/bin/ffmpeg.exe" },
+  "mux_format": "mp4",
+  "max_concurrent": 2,
+  "active": 1
+}
+```
+
+`m3u8.ready=false` 时新建任务返回 `code=5011`。`enabled=false` 时全部下载接口返回 `code=5010`。
+
+#### ② 新建任务
+
+```
+POST /api/admin/download/m3u8
+```
+
+```json
+{
+  "url": "https://example.com/hls/index.m3u8",
+  "title": "示例影片",
+  "cover_url": "https://example.com/poster.jpg",
+  "category_id": 1,
+  "description": "",
+  "sort": 0,
+  "headers": { "Referer": "https://example.com/" },
+  "force": false
+}
+```
+
+| 字段 | 必填 | 说明 |
+| --- | --- | --- |
+| `url` | ✅ | 只接受 `http` / `https` |
+| `title` | — | 留空回退到链接末段文件名 |
+| `cover_url` | — | 留空则自动抽关键帧 |
+| `category_id` | — | `0` 表示用 `download.default_category_id`；两者都为 0 时报 `1001` |
+| `headers` | — | 也接受 `"Key: Value"` 多行文本，服务端归一化为字典 |
+| `force` | — | 同一链接已成功下载过时是否重下 |
+
+**响应** `data` 为任务快照（同 ④ 的结构），`stage="queued"`，下载在后台线程进行。
+同一 `url` 已有成功记录且未给 `force` 时，直接返回已有任务快照（不重复下载）。
+
+#### ③ 任务列表
+
+```
+GET /api/admin/download/tasks?limit=50
+```
+
+```json
+{
+  "items": [ { "...": "任务快照" } ],
+  "total": 3,
+  "stats": { "by_stage": { "downloading": 1, "finished": 2 } }
+}
+```
+
+管理端页面按 2 秒轮询该接口刷新全部任务卡片。
+
+#### ④ 单个任务进度
+
+```
+GET /api/admin/download/tasks/{task_id}
+```
+
+```json
+{
+  "task_id": "5f3c1a...",
+  "source": "api",
+  "url": "https://example.com/hls/index.m3u8",
+  "title": "示例影片",
+  "category_id": 1,
+  "cover_preview": "/media/covers/2026/09/x.jpg",
+  "stage": "downloading",
+  "stage_text": "下载中",
+  "percent": 42.15,
+  "total_bytes_text": "812.40 MB",
+  "done_bytes_text": "342.42 MB",
+  "speed_text": "8.21 MB/s",
+  "eta_text": "00:57",
+  "video_id": 0,
+  "message": "下载中 23/46 片",
+  "error": "",
+  "log_tail": "……",
+  "elapsed": 41.7,
+  "created_at": "2026-09-26 15:20:11",
+  "started_at": "2026-09-26 15:20:12",
+  "finished_at": null
+}
+```
+
+**阶段与百分比区间**：
+
+| stage | 区间 | 含义 |
+| --- | --- | --- |
+| `queued` | 0 | 已入队，等并发槽位 |
+| `downloading` | 0 → 80 | 分片下载 |
+| `muxing` | 80 → 88 | ffmpeg 混流（音视频分离的流） |
+| `ingesting` | 88 → 90 | 落盘、算摘要 |
+| `probing` | 90 → 95 | 探测元信息 |
+| `covering` | 95 → 100 | 抽帧 / 拉远程封面 |
+| `finished` | 100 | 完成，`video_id` 有效 |
+| `failed` | — | `error` 给原因，`log_tail` 保留原始输出 |
+| `cancelled` | — | 用户主动取消 |
+
+`log_tail` 是下载器输出的尾部若干行，排障时先看它。
+
+#### ⑤ 取消 / 重试 / 删除 / 清理
+
+```
+POST   /api/admin/download/tasks/{task_id}/cancel    # 结束进程树 + 清暂存目录
+POST   /api/admin/download/tasks/{task_id}/retry     # 仅 failed / cancelled 可用
+DELETE /api/admin/download/tasks/{task_id}           # 删记录，不动已入库的视频
+POST   /api/admin/download/tasks/cleanup?days=7      # 清理 N 天前的失败/取消任务
+```
+
+对运行中的任务执行取消以外的写操作返回 `code=5013`。任务 ID 不存在返回 `code=4007`。
+
+#### ⑥ 插件调用示例
+
+```js
+// chrome 插件 background（无需登录管理端）
+await fetch('http://127.0.0.1:8000/api/admin/download/m3u8', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-API-Token': await getToken()   // 与 config.yaml 的 download.api_token 一致
+  },
+  body: JSON.stringify({
+    url: m3u8Url,
+    title: pageTitle,
+    cover_url: posterUrl
+  })
+});
+```
+
+#### ⑦ 进程重启的兜底
+
+服务启动时会把上次进程遗留的活跃任务（`queued`/`downloading`/`muxing`/`ingesting`）
+统一标记为失败，`error` 为「服务重启中断」，避免页面挂着永不推进的进度条。
 
 ---
 

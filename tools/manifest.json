@@ -1,0 +1,26 @@
+{
+  "generated_at": "2026-09-26T07:45:31+00:00",
+  "platform": "windows/amd64",
+  "tools": [
+    {
+      "key": "re",
+      "name": "N_m3u8DL-RE",
+      "path": "tools/N_m3u8DL-RE/N_m3u8DL-RE.exe",
+      "version": "0.6.0+df70f0b3da0c630bd413bf617e758051f6b64757",
+      "source": "",
+      "size": 13287936,
+      "files": [],
+      "sha256": "35e7c16983f0315bba2a3f37dc392fdfa074be614c8effb642b78376b18ba272"
+    },
+    {
+      "key": "ffmpeg",
+      "name": "ffmpeg",
+      "path": "tools/ffmpeg/bin/ffmpeg.exe",
+      "version": "9.0.2-essentials_build-www.gyan.",
+      "source": "",
+      "size": 105423872,
+      "files": [],
+      "sha256": "3256173f3f8bffd7df12227c68adf68025edb1832273a9530688a7bb1ed8edec"
+    }
+  ]
+}

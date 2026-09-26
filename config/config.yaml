@@ -117,6 +117,49 @@ media:
   ffmpeg_path: "ffmpeg"
 
 # -----------------------------------------------------------------------------
+# m3u8 / HLS 链接下载导入（基于 N_m3u8DL-RE）
+# 把「在线 m3u8 链接」直接下载成文件并入库，等价于走了一遍上传：下载暂存
+# -> （可选）ffmpeg 混流为 mp4 -> 探测 -> 封面 -> 写 video 表。
+# 二进制获取：python scripts/fetch_tools.py
+# -----------------------------------------------------------------------------
+download:
+  # 总开关。关闭后 /admin/download/** 一律返回「功能已关闭」，前端也会隐藏入口。
+  enabled: true
+  # N_m3u8DL-RE 可执行文件（相对项目根目录或绝对路径）
+  binary: "tools/N_m3u8DL-RE/N_m3u8DL-RE.exe"
+  # ffmpeg 可执行文件。留空则按 tools/ffmpeg/bin/ffmpeg(.exe) -> PATH 顺序自动探测。
+  # 分离音视频流（HLS 常见的 video+audio 两条播放列表）必须靠它混流成 mp4。
+  ffmpeg_binary: ""
+  # 同时下载的任务数（并发进程数）
+  max_concurrent: 2
+  # 单个任务的分片下载线程数 / 分片失败重试次数
+  threads: 8
+  download_retry: 3
+  # 单任务最长运行秒数，超时强制结束（防挂死；0 = 不限）
+  timeout_seconds: 7200
+  # 传给 N_m3u8DL-RE 的额外参数（数组）。需要 Cookie/Referer 时优先用接口的
+  # headers 字段，全局兜底参数才写这里，例如:
+  #   extra_args: ["-H", "User-Agent: Mozilla/5.0"]
+  extra_args: []
+  # 自动选择所有类型的最佳轨道（多码率播放列表必开）
+  auto_select: true
+  # 完成后混流的容器：mp4 / mkv / 空串(不混流)。需要 ffmpeg；缺失时自动降级为不混流，
+  # 由入库时的容器校验+自动转封装兜底。
+  mux_format: "mp4"
+  # 远程封面最大体积（字节），0 = 不限制
+  cover_max_bytes: 20971520
+  # 下载完是否复用上传台账（upload_session）记录内容摘要：留痕后可被网页端秒传命中。
+  # 大文件会多读一遍磁盘算 SHA-256，追求速度可关。
+  record_hash: true
+  # 新建任务时的兜底分类 ID（接口/前端都没给分类时用）。0 = 必须显式指定分类。
+  default_category_id: 0
+  # 【给浏览器插件用】调用令牌：非空时，请求头带 X-API-Token 即可免登录调用下载接口。
+  # 留空 = 关闭该通道，插件必须走管理员账号登录拿 JWT。
+  api_token: "${MM_DOWNLOAD_API_TOKEN:}"
+  # X-API-Token 调用时任务的归属用户 ID；0 = 自动取第一个管理员
+  api_user_id: 0
+
+# -----------------------------------------------------------------------------
 # 业务规则
 # -----------------------------------------------------------------------------
 business:
