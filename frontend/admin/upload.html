@@ -253,8 +253,17 @@
           <div class="mm-card__body">
             <div class="mm-field">
               <label class="mm-field__label">m3u8 链接 *</label>
-              <input class="mm-input" v-model.trim="dlForm.url" placeholder="https://example.com/hls/index.m3u8"
-                     @keyup.enter="submitDownload" />
+              <div style="display:flex;gap:8px;align-items:center">
+                <input class="mm-input" style="flex:1;min-width:0" v-model.trim="dlForm.url"
+                       placeholder="https://example.com/hls/index.m3u8"
+                       @paste="onDlUrlPaste" @keyup.enter="submitDownload" />
+                <el-button style="flex:none" @click="pasteDlTask">
+                  <el-icon><DocumentCopy /></el-icon>一键粘贴
+                </el-button>
+              </div>
+              <div class="mm-muted" style="font-size:12px;margin-top:6px">
+                可直接粘贴浏览器插件「一键复制」出来的内容，会自动填好链接、视频名称与封面
+              </div>
             </div>
 
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-top:12px">
@@ -394,10 +403,15 @@
               <b>④ 判重</b>：同一个链接成功后再次提交会直接复用既有任务，
               想重下勾选「重新下载」。
             </p>
-            <p style="margin:0">
+            <p style="margin:0 0 6px">
               <b>浏览器插件</b>：在 <code>config.yaml</code> 里设置 <code>download.api_token</code> 后，
               插件带 <code>X-API-Token</code> 请求头即可免登录投递任务，接口见
               <code>doc/03-API接口文档.md</code> 的「m3u8 下载」章节。
+            </p>
+            <p style="margin:0">
+              <b>快捷填表</b>：插件弹窗点「一键复制」会输出一段键值对
+              （<code>url= / title= / cover=</code>）。回到这里点「一键粘贴」，
+              或直接把内容粘进链接输入框，链接、视频名称、封面会一次填好，只需再选分类。
             </p>
           </div>
         </div>
@@ -868,6 +882,87 @@
                 if (key && value) result[key] = value;
               });
             return result;
+          },
+          /**
+           * 解析浏览器插件「一键复制」出来的键值对文本。
+           *
+           * 格式（`#` 开头是注释行，可缺省）：
+           *   # MediaManager 下载任务
+           *   url=https://example.com/hls/index.m3u8
+           *   title=视频名称
+           *   cover=https://example.com/poster.jpg
+           *
+           * 认不出 url 就返回 null —— 调用方靠它区分「键值对」和「一条普通链接」，
+           * 后者必须按默认粘贴处理，不能被拦下来。
+           */
+          parseTaskText: function (text) {
+            var raw = String(text || '');
+            if (!/^\s*(?:url|title|cover|cover_url)\s*=/im.test(raw)) return null;
+            var out = { url: '', title: '', cover: '' };
+            raw.split('\n').forEach(function (line) {
+              var trimmed = line.trim();
+              if (!trimmed || trimmed.charAt(0) === '#') return;
+              var idx = trimmed.indexOf('=');
+              if (idx <= 0) return;
+              var key = trimmed.slice(0, idx).trim().toLowerCase();
+              var value = trimmed.slice(idx + 1).trim();
+              if (!value) return;
+              // 同名键出现多次时取第一条，行为可预期
+              if (key === 'url' && !out.url) out.url = value;
+              else if (key === 'title' && !out.title) out.title = value;
+              else if ((key === 'cover' || key === 'cover_url') && !out.cover) out.cover = value;
+            });
+            return out.url ? out : null;
+          },
+          /** 把识别结果填进表单。只覆盖有值的字段，分类保持用户已选的。 */
+          applyDlTaskText: function (text) {
+            var parsed = this.parseTaskText(text);
+            if (!parsed) return false;
+            this.dlForm.url = parsed.url;
+            if (parsed.title) this.dlForm.title = parsed.title;
+            if (parsed.cover) this.dlForm.coverUrl = parsed.cover;
+            if (!this.dlForm.categoryId && this.defaultCategory) {
+              this.dlForm.categoryId = this.defaultCategory;
+            }
+            return true;
+          },
+          /**
+           * 粘贴到链接输入框时自动识别。
+           *
+           * 必须拦 paste 事件读 clipboardData：`<input>` 是**单行元素**，多行文本
+           * 粘进去换行会被浏览器直接吃掉，等 `input` 事件触发时已经分不出行了。
+           */
+          onDlUrlPaste: function (e) {
+            var text = (e.clipboardData || window.clipboardData).getData('text');
+            if (!this.applyDlTaskText(text)) return;   // 普通链接 → 走默认粘贴
+            e.preventDefault();
+            MM.vant.toast('已识别并填充任务信息', 'success');
+          },
+          /** 「一键粘贴」按钮：直接读剪贴板，省掉一次 Ctrl+V。 */
+          pasteDlTask: function () {
+            var self = this;
+            if (!navigator.clipboard || !navigator.clipboard.readText) {
+              MM.ui.warning('当前浏览器不支持读取剪贴板，请直接粘贴到链接输入框');
+              return;
+            }
+            navigator.clipboard
+              .readText()
+              .then(function (text) {
+                if (self.applyDlTaskText(text)) {
+                  MM.vant.toast('已识别并填充任务信息', 'success');
+                  return;
+                }
+                var single = String(text || '').trim();
+                if (/^https?:\/\/\S+$/i.test(single)) {
+                  self.dlForm.url = single;
+                  MM.vant.toast('已填入链接', 'success');
+                } else {
+                  MM.ui.warning('剪贴板里没有可识别的内容，请先用插件「一键复制」');
+                }
+              })
+              .catch(function () {
+                MM.ui.warning('读取剪贴板被拒绝，请直接粘贴到链接输入框');
+              });
           },
           cancelDownload: function (task) {
             var self = this;
