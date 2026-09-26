@@ -90,6 +90,23 @@ def find_by_ids(video_ids: list[int]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda r: order.get(int(r["id"]), 999999))
 
 
+def find_by_name_size(original_name: str, size: int) -> dict[str, Any] | None:
+    """按「原始文件名 + 字节数」查找同一条记录（目录批量导入时判重用）。
+
+    不读文件内容，因此可用于大目录的快速去重；比 ``find_by_hash`` 便宜得多，
+    也更宽松（同名同大小基本等同于同一文件）。
+    """
+    return db.query_one(
+        """
+        SELECT id, title, path, size, created_at
+        FROM video
+        WHERE original_name = %s AND size = %s
+        ORDER BY id DESC LIMIT 1
+        """,
+        (original_name, int(size)),
+    )
+
+
 def find_by_hash(file_hash: str) -> dict[str, Any] | None:
     """按文件 hash 查重（秒传）。hash 存在 upload_session 里，这里做联合查询。"""
     return db.query_one(

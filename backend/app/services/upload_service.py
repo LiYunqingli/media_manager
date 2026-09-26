@@ -7,9 +7,10 @@
     ① /init      分配任务      -> 生成 upload_id、分片大小、总分片数（可秒传）
     ② /chunk     分片上传      -> 前端把文件切成 N 片逐片 POST，每片落盘 + 记库
     ③ /merge     触发合并      -> 后台线程按序拼接为一个完整文件（实时写合并进度）
-    ④ 内部       探测元信息    -> 时长/分辨率/码率
-    ⑤ 内部       生成封面      -> 优先手动封面，否则抽关键帧
-    ⑥ /progress  查询进度      -> 轮询或 WebSocket 推送同一份快照
+    ④ 内部       处理并入库    -> 容器校验/自动转封装 → 探测 → 封面 → 写 video 表
+                                  实现见 ingest_service.ingest_file，与服务端目录批量
+                                  导入（scripts/import_videos.py）共用同一段逻辑
+    ⑤ /progress  查询进度      -> 轮询或 WebSocket 推送同一份快照
 
 进度分段（整体 0-100）
 ------------------------
@@ -28,7 +29,6 @@ finished      100        全部完成
 """
 from __future__ import annotations
 
-import contextlib
 import threading
 import time
 import uuid
@@ -40,7 +40,7 @@ from app.core.config import get_settings
 from app.core.errors import BizError, ErrorCode
 from app.core.logger import get_logger
 from app.repositories import upload_repo, video_repo
-from app.services import media_service
+from app.services import ingest_service
 from app.utils import files as file_utils
 from app.utils.presenter import present_upload
 
@@ -73,11 +73,6 @@ def chunk_dir(upload_id: str) -> Path:
 
 def chunk_file(upload_id: str, index: int) -> Path:
     return chunk_dir(upload_id) / f"{index:08d}.part"
-
-
-def _rel(path: Path, root: Path) -> str:
-    """转成相对 storage 根目录的 POSIX 风格路径（入库用）。"""
-    return path.resolve().relative_to(root.resolve()).as_posix()
 
 
 # ===========================================================================
@@ -331,100 +326,34 @@ def _merge_worker(upload_id: str, payload: dict[str, Any]) -> None:
         tmp_target.replace(merged_path)
         logger.info("合并完成 %s -> %s (%s)", upload_id, merged_path.name, file_utils.human_size(actual_size))
 
-        # ---------------- 容器校验 / 自动转封装 ----------------
-        # 扩展名不可信：把 .ts / .flv / .mkv 改名成 .mp4 的上游文件很常见。这类文件
-        # 字节完整、FFmpeg 也能解码，但系统播放器按扩展名解析会报「文件已损坏」，
-        # 容易被误判成上传/合并出错。合并是**按字节原样拼接**、不做转封装，所以这里
-        # 检测到不匹配就**自动转封装**（stream copy，无损、秒级），失败才退回提示。
-        container_note = ""
-        actual_container = media_service.detect_container(merged_path)
-        allowed = media_service.CONTAINERS_BY_EXT.get(target.suffix.lower())
-        if actual_container != "unknown" and allowed and actual_container not in allowed:
-            logger.warning(
-                "容器与扩展名不符 %s: 实际=%s 扩展名=%s",
-                merged_path.name, actual_container, target.suffix,
-            )
-            remuxed = False
-            if bool(settings.get("media.auto_remux", True)):
-                upload_repo.update(
-                    upload_id,
-                    {
-                        "stage": "merging",
-                        "percent": _stage_percent("merging", 1.0),
-                        "message": f"检测到 {actual_container.upper()} 容器，正在转封装为 {target.suffix}…",
-                    },
-                )
-                remuxed = _remux_in_place(merged_path, target.suffix)
+        def _on_stage(stage: str, ratio: float, message: str) -> None:
+            """把入库阶段映射回上传进度（``ratio`` 为阶段内比例）。"""
+            mapped = "merging" if stage == "remuxing" else stage
+            fields: dict[str, Any] = {
+                "stage": mapped,
+                "percent": _stage_percent(mapped, ratio),
+            }
+            if message:
+                fields["message"] = message
+            upload_repo.update(upload_id, fields)
 
-            if remuxed:
-                actual_size = file_utils.file_size(merged_path)
-                container_note = (
-                    f"原文件实为 {actual_container.upper()} 容器，已自动转封装为 {target.suffix.upper()}"
-                )
-                logger.info(
-                    "已自动转封装 %s: %s -> %s (%s)",
-                    merged_path.name, actual_container, target.suffix,
-                    file_utils.human_size(actual_size),
-                )
-            else:
-                container_note = (
-                    f"文件实际是 {actual_container.upper()} 容器，与扩展名 {target.suffix} 不符，"
-                    "系统播放器可能提示文件损坏（建议用 VLC/PotPlayer 打开，或转封装为 MP4）"
-                )
-
-        # ---------------- 探测元信息 ----------------
-        upload_repo.update(
-            upload_id,
-            {"stage": "probing", "percent": _stage_percent("probing", 0.3), "message": "解析视频信息"},
-        )
-        info = media_service.probe(merged_path)
-        upload_repo.update(upload_id, {"percent": _stage_percent("probing", 1.0)})
-
-        # ---------------- 生成封面 ----------------
-        upload_repo.update(
-            upload_id,
-            {"stage": "covering", "percent": _stage_percent("covering", 0.2), "message": "生成视频封面"},
-        )
-        cover_rel = ""
-        cover_source = 0
-        manual_cover = (payload.get("cover") or "").strip()
-        if manual_cover:
-            cover_rel = manual_cover.lstrip("/")
-            cover_source = 1
-        else:
-            cover_dir = settings.storage_dir("cover_dir")
-            cover_sub = file_utils.dated_subdir(by_day=False)
-            cover_name = f"{target.stem}.jpg"
-            cover_path = cover_dir / cover_sub / cover_name
-            ok, backend = media_service.extract_cover(merged_path, cover_path)
-            if ok:
-                cover_rel = _rel(cover_path, settings.storage_root)
-                cover_source = 0
-                logger.info("封面已生成 [%s] %s", backend, cover_name)
-            else:
-                logger.warning("封面生成失败（前端将显示占位图）: %s", target.stem)
-
-        # ---------------- 入库 ----------------
-        relative_video = _rel(merged_path, settings.storage_root)
         title = (payload.get("title") or session.get("title") or Path(session["file_name"]).stem)[:255]
-        video_id = video_repo.create(
+        outcome = ingest_service.ingest_file(
+            merged_path,
             category_id=int(payload.get("category_id") or session.get("category_id") or 0),
             title=title,
-            description=payload.get("description") or "",
-            cover=cover_rel,
-            path=relative_video,
             original_name=session["file_name"],
-            duration=float(info.get("duration") or 0),
-            size=actual_size,
-            width=int(info.get("width") or 0),
-            height=int(info.get("height") or 0),
-            bitrate=int(info.get("bitrate") or 0),
-            mime=media_service.guess_mime(session["file_name"]),
-            cover_source=cover_source,
+            description=payload.get("description") or "",
             sort=int(payload.get("sort") or 0),
-            status=1,
+            manual_cover=payload.get("cover") or "",
+            on_stage=_on_stage,
         )
+        video_id = outcome.video_id
+        actual_size = outcome.size
 
+        message = f"完成，耗时 {time.time() - started:.1f}s"
+        if outcome.notes:
+            message += "｜注意：" + "；".join(outcome.notes)
         upload_repo.update(
             upload_id,
             {
@@ -433,8 +362,7 @@ def _merge_worker(upload_id: str, payload: dict[str, Any]) -> None:
                 "video_id": video_id,
                 "merged_bytes": actual_size,
                 "speed": 0,
-                "message": f"完成，耗时 {time.time() - started:.1f}s"
-                + (f"｜注意：{container_note}" if container_note else ""),
+                "message": message,
             },
         )
 
@@ -455,34 +383,6 @@ def _merge_worker(upload_id: str, payload: dict[str, Any]) -> None:
         with _RUNNING_LOCK:
             _RUNNING.discard(upload_id)
         _SPEED_CACHE.pop(upload_id, None)
-
-
-def _remux_in_place(path: Path, ext: str) -> bool:
-    """把 ``path`` 就地转封装为 ``ext`` 对应的容器。
-
-    先写到 ``storage/tmp`` 下的临时文件，校验容器正确后才原子替换原文件；
-    任何一步失败都保持原文件不变（宁可留一个容器不符的文件，也不能把内容搞丢）。
-    """
-    settings = get_settings()
-    tmp_dir = settings.storage_dir("tmp_dir")
-    file_utils.ensure_dir(tmp_dir)
-    tmp_out = tmp_dir / f"{path.stem}.remux{ext}"
-
-    ok, detail = media_service.remux_to_container(path, ext, out_path=tmp_out)
-    if not ok:
-        logger.warning("转封装失败，保留原文件 %s: %s", path.name, detail)
-        with contextlib.suppress(OSError):
-            tmp_out.unlink()
-        return False
-
-    try:
-        tmp_out.replace(path)
-    except OSError as exc:
-        logger.warning("转封装结果落盘失败 %s: %s", path.name, exc)
-        with contextlib.suppress(OSError):
-            tmp_out.unlink()
-        return False
-    return True
 
 
 def cancel_upload(user: dict[str, Any], upload_id: str) -> None:
