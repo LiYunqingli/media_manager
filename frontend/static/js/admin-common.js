@@ -8,17 +8,18 @@
   var MM = (global.MM = global.MM || {});
   var util = MM.util;
 
-  /* ------------------------------------------------------------ 菜单定义 */
+  /* ------------------------------------------------------------ 菜单定义
+     icon 取 Element Plus 图标组件名（element-plus-icons.js 已全局注册） */
   MM.adminMenu = [
     { group: '内容' },
-    { key: 'upload', title: '上传视频', icon: '⬆', path: '/admin/upload.html', badge: '分片' },
-    { key: 'videos', title: '视频管理', icon: '🎬', path: '/admin/videos.html' },
-    { key: 'categories', title: '分类管理', icon: '🗂', path: '/admin/categories.html' },
+    { key: 'upload', title: '上传视频', icon: 'Upload', path: '/admin/upload.html', badge: '分片' },
+    { key: 'videos', title: '视频管理', icon: 'VideoCamera', path: '/admin/videos.html' },
+    { key: 'categories', title: '分类管理', icon: 'FolderOpened', path: '/admin/categories.html' },
     { group: '用户' },
-    { key: 'users', title: '用户与权限', icon: '👤', path: '/admin/users.html' },
+    { key: 'users', title: '用户与权限', icon: 'UserFilled', path: '/admin/users.html' },
     { group: '系统' },
-    { key: 'index', title: '数据概览', icon: '📊', path: '/admin/index.html' },
-    { key: 'settings', title: '系统信息', icon: '⚙', path: '/admin/settings.html' }
+    { key: 'index', title: '数据概览', icon: 'DataAnalysis', path: '/admin/index.html' },
+    { key: 'settings', title: '系统信息', icon: 'Setting', path: '/admin/settings.html' }
   ];
 
   /* ------------------------------------------------------------ 外壳组件 */
@@ -95,29 +96,36 @@
       '        <div v-if="m.group" class="admin-menu__group">{{ m.group }}</div>',
       '        <div v-else class="admin-menu__item" :class="{ \'admin-menu__item--active\': m.key === active }"',
       '             @click="go(m.path)" :title="m.title">',
-      '          <i>{{ m.icon }}</i><span>{{ m.title }}</span>',
+      '          <el-icon><component :is="m.icon" /></el-icon><span>{{ m.title }}</span>',
       '          <span v-if="m.badge" class="admin-menu__badge">{{ m.badge }}</span>',
       '        </div>',
       '      </template>',
       '    </nav>',
       '    <div class="admin-side__foot">',
-      '      <button class="mm-btn mm-btn--sm mm-btn--block" @click="goWeb">↗ 打开用户端</button>',
+      '      <button class="mm-btn mm-btn--sm mm-btn--block" @click="goWeb">',
+      '        <el-icon><TopRight /></el-icon><span>打开用户端</span>',
+      '      </button>',
       '    </div>',
       '  </aside>',
       '  <div class="admin-mask" @click="mobileOpen = false"></div>',
       '  <div class="admin-main">',
       '    <header class="admin-topbar">',
-      '      <button class="mm-btn mm-btn--icon mm-btn--sm" @click="toggleCollapse" title="折叠菜单">☰</button>',
+      '      <button class="mm-btn mm-btn--icon mm-btn--sm" @click="toggleCollapse" title="折叠菜单" aria-label="折叠菜单">',
+      '        <el-icon><Menu /></el-icon>',
+      '      </button>',
       '      <div>',
       '        <div class="admin-topbar__title">{{ title }}</div>',
       '        <div class="admin-topbar__crumb" v-if="crumb">{{ crumb }}</div>',
       '      </div>',
       '      <div class="mm-grow"></div>',
-      '      <button class="theme-toggle" @click="toggleTheme" :title="theme === \'dark\' ? \'切换到亮色\' : \'切换到暗色\'">',
-      '        {{ theme === \'dark\' ? \'☀\' : \'☾\' }}',
+      '      <button class="theme-toggle" @click="toggleTheme"',
+      '        :title="theme === \'dark\' ? \'切换到亮色\' : \'切换到暗色\'"',
+      '        :aria-label="theme === \'dark\' ? \'切换到亮色\' : \'切换到暗色\'">',
+      '        <el-icon v-if="theme === \'dark\'"><Sunny /></el-icon>',
+      '        <el-icon v-else><Moon /></el-icon>',
       '      </button>',
       '      <div class="mm-row" style="gap:8px">',
-      '        <div class="web-avatar">{{ avatarText() }}</div>',
+      '        <div class="mm-avatar">{{ avatarText() }}</div>',
       '        <div style="line-height:1.25">',
       '          <div style="font-size:13px">{{ user.nickname || user.username }}</div>',
       '          <div style="font-size:11px;color:var(--text-3)">管理员</div>',

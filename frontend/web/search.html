@@ -23,7 +23,7 @@
 <body>
   <div id="app" v-cloak>
     <web-shell :user="user" :keyword="keyword" @search="onSearch">
-      <div class="mm-section__head">
+      <div class="page-head">
         <h2 class="mm-section__title" v-if="keyword">
           搜索「{{ keyword }}」
         </h2>
@@ -39,7 +39,7 @@
         <div class="mm-grid" v-if="videos.length">
           <v-card v-for="v in videos" :key="v.id" :video="v"></v-card>
         </div>
-        <mm-empty v-else icon="🔍" :text="keyword ? '没有找到相关视频，换个关键词试试' : '请输入关键词开始搜索'"></mm-empty>
+        <mm-empty v-else icon="search" :text="keyword ? '没有找到相关视频，换个关键词试试' : '请输入关键词开始搜索'"></mm-empty>
         <mm-pager :page="page" :pages="pages" :total="total" @change="changePage"></mm-pager>
       </template>
     </web-shell>
@@ -49,6 +49,7 @@
   <script src="/static/vendor/vant.min.js"></script>
   <script src="/static/js/config.js"></script>
   <script src="/static/js/utils.js"></script>
+  <script src="/static/js/icons.js"></script>
   <script src="/static/js/ui.js"></script>
   <script src="/static/js/request.js"></script>
   <script src="/static/js/components-web.js"></script>

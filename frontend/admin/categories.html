@@ -18,7 +18,6 @@
   <link rel="stylesheet" href="/static/vendor/element-plus.css" />
   <link rel="stylesheet" href="/static/vendor/element-plus-dark.css" />
   <link rel="stylesheet" href="/static/css/common.css" />
-  <link rel="stylesheet" href="/static/css/web.css" />
   <link rel="stylesheet" href="/static/css/admin.css" />
 </head>
 <body>
@@ -26,7 +25,9 @@
     <admin-shell title="分类管理" crumb="内容 / 分类管理" active="categories">
 
       <div class="toolbar">
-        <span class="toolbar__title">🗂 分类列表（{{ list.length }}）</span>
+        <span class="toolbar__title">
+          <el-icon><FolderOpened /></el-icon>分类列表（{{ list.length }}）
+        </span>
         <div class="mm-row">
           <el-button @click="load">刷新</el-button>
           <el-button type="primary" @click="openCreate">新增分类</el-button>
@@ -38,8 +39,14 @@
           <el-table-column label="排序" width="130">
             <template #default="{ row, $index }">
               <div class="mm-row" style="gap:4px">
-                <el-button size="small" text :disabled="$index === 0" @click="move($index, -1)">↑</el-button>
-                <el-button size="small" text :disabled="$index === list.length - 1" @click="move($index, 1)">↓</el-button>
+                <el-button size="small" text :disabled="$index === 0" @click="move($index, -1)"
+                           title="上移" aria-label="上移">
+                  <el-icon><ArrowUp /></el-icon>
+                </el-button>
+                <el-button size="small" text :disabled="$index === list.length - 1" @click="move($index, 1)"
+                           title="下移" aria-label="下移">
+                  <el-icon><ArrowDown /></el-icon>
+                </el-button>
                 <span class="mm-mono mm-muted" style="font-size:12px">{{ row.sort }}</span>
               </div>
             </template>
@@ -150,6 +157,7 @@
   <script src="/static/vendor/element-plus-icons.js"></script>
   <script src="/static/js/config.js"></script>
   <script src="/static/js/utils.js"></script>
+  <script src="/static/js/icons.js"></script>
   <script src="/static/js/ui.js"></script>
   <script src="/static/js/request.js"></script>
   <script src="/static/js/components-web.js"></script>

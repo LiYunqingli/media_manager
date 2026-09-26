@@ -19,57 +19,14 @@
   <link rel="stylesheet" href="/static/vendor/vant.css" />
   <link rel="stylesheet" href="/static/css/common.css" />
   <link rel="stylesheet" href="/static/css/web.css" />
-  <style>
-    /* 影院模式：播放器更宽，内容区收窄居中 */
-    .theater-main {
-      background: #000;
-      border-radius: var(--radius);
-      overflow: hidden;
-      border: 1px solid var(--border);
-    }
-    .theater-main .mp video {
-      max-height: 76vh;
-    }
-    .play-side {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 10px;
-    }
-    .shortcut-tip {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px 14px;
-      font-size: 11.5px;
-      color: var(--text-3);
-      padding: 10px 12px;
-      border-radius: var(--radius-sm);
-      background: var(--panel-2);
-      margin-top: 12px;
-    }
-    .shortcut-tip b {
-      color: var(--text-2);
-      font-weight: 500;
-    }
-    @media (max-width: 767px) {
-      .theater-main {
-        border-radius: 0;
-        border-left: none;
-        border-right: none;
-      }
-      .shortcut-tip {
-        display: none;
-      }
-    }
-  </style>
 </head>
 <body>
   <div id="app" v-cloak>
     <web-shell :user="user" :active="video ? 'cat-' + video.category_id : ''">
 
-      <div v-if="loading" class="mm-skeleton" style="width:100%;aspect-ratio:16/9;border-radius:10px"></div>
+      <div v-if="loading" class="mm-skeleton page-skeleton__hero"></div>
 
-      <mm-empty v-else-if="error" icon="⚠️" :text="error">
+      <mm-empty v-else-if="error" icon="alert" :text="error">
         <button class="mm-btn mm-btn--primary mm-mt-16" @click="backHome">返回首页</button>
       </mm-empty>
 
@@ -81,22 +38,33 @@
             <h1 class="detail-title">{{ video.title }}</h1>
             <div class="detail-meta">
               <span class="mm-tag">{{ video.category_name || '未分类' }}</span>
-              <span>👁 {{ count(viewCount) }} 次播放</span>
-              <span>⏱ {{ video.duration_text }}</span>
-              <span v-if="video.size_text">📦 {{ video.size_text }}</span>
+              <span class="detail-meta__item">
+                <mm-icon name="eye" :size="14"></mm-icon>{{ count(viewCount) }} 次播放
+              </span>
+              <span class="detail-meta__item">
+                <mm-icon name="clock" :size="14"></mm-icon>{{ video.duration_text }}
+              </span>
+              <span class="detail-meta__item" v-if="video.size_text">
+                <mm-icon name="box" :size="14"></mm-icon>{{ video.size_text }}
+              </span>
               <div class="detail-actions">
                 <button class="mm-btn" :class="{ 'mm-btn--primary': favorited }" @click="toggleFavorite">
-                  {{ favorited ? '★ 已收藏' : '☆ 收藏' }}
+                  <mm-icon :name="favorited ? 'star-filled' : 'star'" :size="15"></mm-icon>
+                  {{ favorited ? '已收藏' : '收藏' }}
                 </button>
-                <button class="mm-btn" @click="goDetail">📄 详情页</button>
-                <button class="mm-btn" @click="pickNext">⏭ 下一个</button>
+                <button class="mm-btn" @click="goDetail">
+                  <mm-icon name="document" :size="15"></mm-icon>详情页
+                </button>
+                <button class="mm-btn" @click="pickNext">
+                  <mm-icon name="forward" :size="15"></mm-icon>下一个
+                </button>
               </div>
             </div>
 
             <div class="detail-desc">{{ video.description || '暂无简介' }}</div>
 
             <div class="shortcut-tip">
-              <span><b>空格/K</b> 播放暂停</span>
+              <span><b>空格 / K</b> 播放暂停</span>
               <span><b>← →</b> 快退快进</span>
               <span><b>↑ ↓</b> 音量</span>
               <span><b>M</b> 静音</span>
@@ -104,6 +72,8 @@
               <span><b>W</b> 网页全屏</span>
               <span><b>[ ]</b> 调速</span>
               <span><b>0-9</b> 按比例跳转</span>
+              <span><b>单击画面</b> 显隐控制栏</span>
+              <span><b>双击画面</b> 播放暂停</span>
               <span><b>长按画面</b> 3 倍速</span>
               <span><b>左右滑动</b> 拖进度</span>
               <span><b>左半屏上下</b> 亮度</span>
@@ -114,7 +84,10 @@
           <aside class="play-side">
             <div class="mm-section__head">
               <h2 class="mm-section__title">接下来播放</h2>
-              <span class="mm-section__more" @click="goCategory(video.category_id)">更多同类 →</span>
+              <span class="mm-section__more" @click="goCategory(video.category_id)">
+                更多同类
+                <mm-icon name="chevron-right" :size="13"></mm-icon>
+              </span>
             </div>
             <div class="related-list">
               <v-item v-for="(v, i) in related" :key="'p' + v.id" :video="v" :index="i + 1"></v-item>
@@ -141,6 +114,7 @@
   <script src="/static/vendor/vant.min.js"></script>
   <script src="/static/js/config.js"></script>
   <script src="/static/js/utils.js"></script>
+  <script src="/static/js/icons.js"></script>
   <script src="/static/js/ui.js"></script>
   <script src="/static/js/request.js"></script>
   <script src="/static/js/components-web.js"></script>

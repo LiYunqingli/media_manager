@@ -25,13 +25,13 @@
     <web-shell :user="user" :active="video ? 'cat-' + video.category_id : ''">
 
       <!-- 加载中 -->
-      <div v-if="loading" class="mm-col" style="gap:18px">
-        <div class="mm-skeleton" style="width:100%;aspect-ratio:16/9;border-radius:10px"></div>
+      <div v-if="loading" class="page-skeleton">
+        <div class="mm-skeleton page-skeleton__hero"></div>
         <div class="mm-skeleton" style="height:22px;width:52%"></div>
         <div class="mm-skeleton" style="height:14px;width:34%"></div>
       </div>
 
-      <mm-empty v-else-if="error" icon="⚠️" :text="error">
+      <mm-empty v-else-if="error" icon="alert" :text="error">
         <button class="mm-btn mm-btn--primary mm-mt-16" @click="backHome">返回首页</button>
       </mm-empty>
 
@@ -47,18 +47,33 @@
 
             <div class="detail-meta">
               <span class="mm-tag">{{ video.category_name || '未分类' }}</span>
-              <span>👁 {{ count(viewCount) }} 次播放</span>
-              <span>⏱ {{ video.duration_text }}</span>
-              <span v-if="video.size_text">📦 {{ video.size_text }}</span>
-              <span v-if="video.width">🖥 {{ video.width }}×{{ video.height }}</span>
-              <span>🕒 {{ fromNow(video.created_at) }}</span>
+              <span class="detail-meta__item">
+                <mm-icon name="eye" :size="14"></mm-icon>{{ count(viewCount) }} 次播放
+              </span>
+              <span class="detail-meta__item">
+                <mm-icon name="clock" :size="14"></mm-icon>{{ video.duration_text }}
+              </span>
+              <span class="detail-meta__item" v-if="video.size_text">
+                <mm-icon name="box" :size="14"></mm-icon>{{ video.size_text }}
+              </span>
+              <span class="detail-meta__item" v-if="video.width">
+                <mm-icon name="monitor" :size="14"></mm-icon>{{ video.width }}×{{ video.height }}
+              </span>
+              <span class="detail-meta__item">
+                <mm-icon name="calendar" :size="14"></mm-icon>{{ fromNow(video.created_at) }}
+              </span>
 
               <div class="detail-actions">
                 <button class="mm-btn" :class="{ 'mm-btn--primary': favorited }" @click="toggleFavorite">
-                  {{ favorited ? '★ 已收藏' : '☆ 收藏' }}
+                  <mm-icon :name="favorited ? 'star-filled' : 'star'" :size="15"></mm-icon>
+                  {{ favorited ? '已收藏' : '收藏' }}
                 </button>
-                <button class="mm-btn" @click="theaterMode">⛶ 影院模式</button>
-                <button class="mm-btn" @click="copyLink">🔗 复制链接</button>
+                <button class="mm-btn" @click="theaterMode">
+                  <mm-icon name="page-fullscreen" :size="15"></mm-icon>影院模式
+                </button>
+                <button class="mm-btn" @click="copyLink">
+                  <mm-icon name="link" :size="15"></mm-icon>复制链接
+                </button>
               </div>
             </div>
 
@@ -68,7 +83,7 @@
             </div>
 
             <!-- 简介 -->
-            <div class="detail-desc" :style="!descExpanded ? 'max-height:96px;overflow:hidden' : ''">
+            <div class="detail-desc" :class="{ 'detail-desc--collapsed': !descExpanded }">
               {{ video.description || '暂无简介' }}
             </div>
             <button v-if="(video.description || '').length > 120" class="mm-btn mm-btn--sm"
@@ -80,7 +95,10 @@
             <section class="mm-section" style="margin-top:26px" v-if="video.related && video.related.length">
               <div class="mm-section__head">
                 <h2 class="mm-section__title">相关推荐 · {{ video.category_name }}</h2>
-                <span class="mm-section__more" @click="goCategory(video.category_id)">更多同类 →</span>
+                <span class="mm-section__more" @click="goCategory(video.category_id)">
+                  更多同类
+                  <mm-icon name="chevron-right" :size="13"></mm-icon>
+                </span>
               </div>
               <div class="mm-grid">
                 <v-card v-for="v in video.related" :key="'r' + v.id" :video="v"></v-card>
@@ -92,10 +110,15 @@
           <aside class="related-panel">
             <div class="mm-card">
               <div class="mm-card__head">
-                <span class="mm-card__title">📺 同分类热门</span>
-                <span class="mm-section__more" @click="goCategory(video.category_id)">全部 →</span>
+                <span class="mm-card__title">
+                  <mm-icon name="film" :size="15"></mm-icon>同分类热门
+                </span>
+                <span class="mm-section__more" @click="goCategory(video.category_id)">
+                  全部
+                  <mm-icon name="chevron-right" :size="13"></mm-icon>
+                </span>
               </div>
-              <div class="mm-card__body" style="padding:8px">
+              <div class="mm-card__body mm-card__body--tight">
                 <div class="related-list">
                   <v-item v-for="(v, i) in related" :key="'side' + v.id"
                           :video="v" :index="i + 1"></v-item>
@@ -107,9 +130,11 @@
             <!-- 继续观看 -->
             <div class="mm-card mm-mt-16" v-if="continueWatch.length">
               <div class="mm-card__head">
-                <span class="mm-card__title">⏳ 继续观看</span>
+                <span class="mm-card__title">
+                  <mm-icon name="clock" :size="15"></mm-icon>继续观看
+                </span>
               </div>
-              <div class="mm-card__body" style="padding:8px">
+              <div class="mm-card__body mm-card__body--tight">
                 <v-item v-for="h in continueWatch" :key="'cw' + h.video_id"
                         :video="h" :desc="'看到 ' + h.last_position_text"></v-item>
               </div>
@@ -126,6 +151,7 @@
   <script src="/static/vendor/vant.min.js"></script>
   <script src="/static/js/config.js"></script>
   <script src="/static/js/utils.js"></script>
+  <script src="/static/js/icons.js"></script>
   <script src="/static/js/ui.js"></script>
   <script src="/static/js/request.js"></script>
   <script src="/static/js/components-web.js"></script>

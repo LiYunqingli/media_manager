@@ -121,11 +121,12 @@
     name: 'MmEmpty',
     props: {
       text: { type: String, default: '暂无数据' },
-      icon: { type: String, default: '📭' }
+      /** 图标名，取自 MM.icon 的图标集（见 static/js/icons.js） */
+      icon: { type: String, default: 'inbox' }
     },
     template: [
       '<div class="mm-empty">',
-      '  <div class="mm-empty__icon">{{ icon }}</div>',
+      '  <div class="mm-empty__icon"><mm-icon :name="icon" :size="42"></mm-icon></div>',
       '  <div class="mm-empty__text">{{ text }}</div>',
       '  <div><slot></slot></div>',
       '</div>'

@@ -1,6 +1,10 @@
 /* ==========================================================================
-   MediaManager —— 公共样式
-   包含：设计变量（亮/暗双主题）、基础重置、通用组件、工具类
+   MediaManager —— 公共样式（设计 token + 基础组件）
+   ==========================================================================
+   配色方向：钢蓝夜幕（Steel Night）
+   底色是偏冷的深灰蓝，主色取钢蓝，辅色取冰青，二者构成品牌渐变。
+   旧的 蓝→紫 渐变已全部移除——紫色与钢蓝同屏会互相削弱，是不必要的杂音。
+
    主题切换：<html data-theme="dark|light">
    ========================================================================== */
 
@@ -11,66 +15,71 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  /* 钢蓝暗色系 */
-  --bg: #0e1319;
-  --bg-gradient: radial-gradient(1200px 600px at 15% -10%, rgba(59, 130, 246, 0.13), transparent 60%),
-    radial-gradient(900px 500px at 95% 0%, rgba(45, 212, 191, 0.07), transparent 55%);
-  --bg-elevated: #151c25;
-  --panel: #1a222d;
-  --panel-2: #1f2833;
-  --panel-hover: #232e3c;
-  --border: #26313f;
-  --border-strong: #33405180;
+  /* --- 表面：从最低到最高，逐层抬升 --- */
+  --bg: #0b1015;
+  --bg-elevated: #111822;
+  --panel: #151d27;
+  --panel-2: #1b2530;
+  --panel-hover: #212d3a;
+  --border: #25313e;
+  --border-strong: #38475a;
 
-  --text: #e8eef7;
-  --text-2: #a9b6c8;
-  --text-3: #6f7d91;
+  /* --- 文字：三档层次 --- */
+  --text: #e8eef6;
+  --text-2: #9cabc0;
+  --text-3: #69798e;
 
-  --primary: #3b82f6;
-  --primary-hover: #5a95f8;
-  --primary-active: #2f6fd8;
-  --primary-soft: rgba(59, 130, 246, 0.14);
+  /* --- 品牌色 --- */
+  --primary: #3d84f7;
+  --primary-hover: #5898fa;
+  --primary-active: #2e6fd9;
+  --primary-soft: rgba(61, 132, 247, 0.15);
   --primary-text: #ffffff;
 
-  --success: #22c55e;
-  --success-soft: rgba(34, 197, 94, 0.14);
-  --warning: #f59e0b;
-  --warning-soft: rgba(245, 158, 11, 0.16);
-  --danger: #ef4444;
-  --danger-soft: rgba(239, 68, 68, 0.14);
+  --accent: #2fd0e4;
+  --accent-soft: rgba(47, 208, 228, 0.15);
+  --grad-brand: linear-gradient(135deg, var(--primary), var(--accent));
+
+  /* --- 语义色 --- */
+  --success: #2fc46f;
+  --success-soft: rgba(47, 196, 111, 0.15);
+  --warning: #eda43a;
+  --warning-soft: rgba(237, 164, 58, 0.16);
+  --danger: #f0565c;
+  --danger-soft: rgba(240, 86, 92, 0.15);
   --info: #38bdf8;
 
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.32);
-  --shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
-  --shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.55);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow: 0 12px 30px rgba(0, 0, 0, 0.48);
+  --shadow-lg: 0 24px 54px rgba(0, 0, 0, 0.58);
 
   --radius-sm: 6px;
   --radius: 10px;
   --radius-lg: 16px;
 
   --header-h: 60px;
-  --sidebar-w: 216px;
+  --sidebar-w: 220px;
   --content-max: 1440px;
 
-  --font: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
-  --font-mono: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+  --font: "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Noto Sans SC",
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", "SFMono-Regular", Consolas, monospace;
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
 
-  --bg: #f4f6fa;
-  --bg-gradient: radial-gradient(1000px 500px at 10% -10%, rgba(59, 130, 246, 0.1), transparent 60%);
+  --bg: #f4f7fa;
   --bg-elevated: #ffffff;
   --panel: #ffffff;
-  --panel-2: #f7f9fc;
-  --panel-hover: #eef2f8;
+  --panel-2: #f2f5fa;
+  --panel-hover: #e8eef6;
   --border: #e2e8f0;
-  --border-strong: #cbd5e1;
+  --border-strong: #c7d2df;
 
-  --text: #16202c;
-  --text-2: #4a5a70;
-  --text-3: #8896a8;
+  --text: #14202b;
+  --text-2: #48596e;
+  --text-3: #7d8da1;
 
   --primary: #2563eb;
   --primary-hover: #3b82f6;
@@ -78,17 +87,21 @@
   --primary-soft: rgba(37, 99, 235, 0.1);
   --primary-text: #ffffff;
 
-  --success: #16a34a;
-  --success-soft: rgba(22, 163, 74, 0.12);
-  --warning: #d97706;
-  --warning-soft: rgba(217, 119, 6, 0.12);
-  --danger: #dc2626;
-  --danger-soft: rgba(220, 38, 38, 0.1);
+  --accent: #0e9bb5;
+  --accent-soft: rgba(14, 155, 181, 0.12);
+  --grad-brand: linear-gradient(135deg, var(--primary), var(--accent));
+
+  --success: #14934f;
+  --success-soft: rgba(20, 147, 79, 0.12);
+  --warning: #c2760c;
+  --warning-soft: rgba(194, 118, 12, 0.12);
+  --danger: #d9343c;
+  --danger-soft: rgba(217, 52, 60, 0.1);
   --info: #0284c7;
 
-  --shadow-sm: 0 1px 4px rgba(15, 23, 42, 0.08);
-  --shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
-  --shadow-lg: 0 18px 42px rgba(15, 23, 42, 0.14);
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.08);
+  --shadow: 0 10px 26px rgba(15, 23, 42, 0.1);
+  --shadow-lg: 0 20px 46px rgba(15, 23, 42, 0.14);
 }
 
 /* --------------------------------------------------------------------------
@@ -111,9 +124,11 @@ body {
   line-height: 1.6;
   color: var(--text);
   background-color: var(--bg);
-  background-image: var(--bg-gradient);
+  /* 一层极淡的品牌辉光，避免大面积纯色显得死板 */
+  background-image: radial-gradient(1100px 560px at 12% -14%, var(--primary-soft), transparent 62%);
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 a {
@@ -133,10 +148,16 @@ h4 {
   margin: 0;
   font-weight: 600;
   line-height: 1.35;
+  letter-spacing: -0.01em;
 }
 
 button {
   font-family: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 ::-webkit-scrollbar {
@@ -159,10 +180,25 @@ button {
 }
 
 /* --------------------------------------------------------------------------
-   3. 通用组件
+   3. 图标
+   -------------------------------------------------------------------------- */
+.mm-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  vertical-align: -0.125em;
+  line-height: 1;
+}
+.mm-svg {
+  display: block;
+}
+
+/* --------------------------------------------------------------------------
+   4. 通用组件
    -------------------------------------------------------------------------- */
 
-/* 3.1 卡片 */
+/* 4.1 卡片 */
 .mm-card {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -180,15 +216,23 @@ button {
 .mm-card__title {
   font-size: 15px;
   font-weight: 600;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+.mm-card__title .mm-icon,
+.mm-card__title .el-icon {
+  color: var(--primary);
 }
 .mm-card__body {
   padding: 18px;
 }
+.mm-card__body--tight {
+  padding: 8px;
+}
 
-/* 3.2 按钮 */
+/* 4.2 按钮 */
 .mm-btn {
   display: inline-flex;
   align-items: center;
@@ -201,8 +245,9 @@ button {
   background: var(--panel-2);
   color: var(--text);
   font-size: 13px;
+  font-weight: 450;
   cursor: pointer;
-  transition: all 0.16s ease;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
   white-space: nowrap;
   user-select: none;
 }
@@ -228,16 +273,23 @@ button {
   background: var(--primary-hover);
   border-color: var(--primary-hover);
 }
+.mm-btn--primary:active {
+  background: var(--primary-active);
+}
 .mm-btn--danger {
   background: var(--danger);
   border-color: var(--danger);
   color: #fff;
 }
 .mm-btn--danger:hover {
-  filter: brightness(1.1);
+  filter: brightness(1.08);
+  background: var(--danger);
 }
 .mm-btn--ghost {
   background: transparent;
+}
+.mm-btn--ghost:hover {
+  background: var(--panel-hover);
 }
 .mm-btn--sm {
   height: 28px;
@@ -260,7 +312,7 @@ button {
   width: 28px;
 }
 
-/* 3.3 标签 */
+/* 4.3 标签 */
 .mm-tag {
   display: inline-flex;
   align-items: center;
@@ -291,7 +343,32 @@ button {
   color: var(--text-3);
 }
 
-/* 3.4 表单 */
+/* 4.4 头像（用户端与管理端共用） */
+.mm-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--grad-brand);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  flex: none;
+  overflow: hidden;
+}
+.mm-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.mm-avatar--lg {
+  width: 64px;
+  height: 64px;
+  font-size: 24px;
+}
+
+/* 4.5 表单 */
 .mm-field {
   display: flex;
   flex-direction: column;
@@ -319,6 +396,10 @@ button {
   outline: none;
   transition: border-color 0.16s, box-shadow 0.16s;
 }
+.mm-input::placeholder,
+.mm-textarea::placeholder {
+  color: var(--text-3);
+}
 .mm-input:focus,
 .mm-select:focus,
 .mm-textarea:focus {
@@ -339,7 +420,7 @@ button {
   padding-right: 32px;
 }
 
-/* 3.5 开关 */
+/* 4.6 开关 */
 .mm-switch {
   position: relative;
   display: inline-block;
@@ -378,23 +459,25 @@ button {
   transform: translateX(18px);
 }
 
-/* 3.6 空状态 / 加载 */
+/* 4.7 空状态 / 骨架 */
 .mm-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   padding: 56px 20px;
   color: var(--text-3);
   text-align: center;
 }
 .mm-empty__icon {
-  font-size: 40px;
-  opacity: 0.5;
+  color: var(--text-3);
+  opacity: 0.55;
 }
 .mm-empty__text {
   font-size: 13px;
+  max-width: 340px;
+  line-height: 1.7;
 }
 
 .mm-skeleton {
@@ -412,7 +495,14 @@ button {
   }
 }
 
-/* 3.7 视频卡片 */
+/* 全局加载旋转（ui.js 的 loading 遮罩引用此动画名） */
+@keyframes mm-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 4.8 视频卡片 */
 .v-card {
   display: flex;
   flex-direction: column;
@@ -452,13 +542,13 @@ button {
   justify-content: center;
   font-size: 26px;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.34);
-  background: linear-gradient(135deg, #1f3a5f, #16232f 60%, #23324a);
+  color: rgba(255, 255, 255, 0.4);
+  background: linear-gradient(135deg, #1d3a5f, #16232f 60%, #23324a);
   letter-spacing: 1px;
 }
 :root[data-theme="light"] .v-card__placeholder {
   background: linear-gradient(135deg, #c9ddff, #e8eefb 60%, #dbe6f7);
-  color: rgba(30, 58, 138, 0.42);
+  color: rgba(30, 58, 138, 0.45);
 }
 .v-card__duration {
   position: absolute;
@@ -466,7 +556,7 @@ button {
   bottom: 6px;
   padding: 1px 6px;
   border-radius: 4px;
-  background: rgba(0, 0, 0, 0.72);
+  background: rgba(0, 0, 0, 0.75);
   color: #fff;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
@@ -507,9 +597,6 @@ button {
   font-size: 12px;
   color: var(--text-3);
 }
-.v-card__meta i {
-  font-style: normal;
-}
 
 /* 横向小卡（列表 / 推荐位） */
 .v-item {
@@ -545,7 +632,7 @@ button {
   font-size: 11px;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(135deg, var(--primary), #7c3aed);
+  background: linear-gradient(135deg, var(--primary), var(--accent));
   border-bottom-right-radius: 6px;
 }
 .v-item__info {
@@ -571,7 +658,7 @@ button {
   overflow: hidden;
 }
 
-/* 3.8 页头 / 区块标题 */
+/* 4.9 区块标题 */
 .mm-section {
   margin-bottom: 26px;
 }
@@ -585,37 +672,40 @@ button {
 .mm-section__title {
   font-size: 17px;
   font-weight: 600;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 9px;
+  min-width: 0;
 }
 .mm-section__title::before {
   content: "";
   width: 3px;
   height: 16px;
   border-radius: 2px;
-  background: linear-gradient(180deg, var(--primary), #7c3aed);
+  background: var(--grad-brand);
+  flex: none;
 }
 .mm-section__more {
   font-size: 12.5px;
   color: var(--text-3);
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 3px;
   cursor: pointer;
+  transition: color 0.16s;
 }
 .mm-section__more:hover {
   color: var(--primary);
 }
 
-/* 3.9 网格 */
+/* 4.10 网格 */
 .mm-grid {
   display: grid;
   gap: 14px;
   grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
 }
 
-/* 3.10 提示 / toast */
+/* 4.11 Toast */
 .mm-toasts {
   position: fixed;
   top: 18px;
@@ -661,7 +751,7 @@ button {
   }
 }
 
-/* 3.11 主题切换按钮 */
+/* 4.12 主题切换按钮 */
 .theme-toggle {
   display: inline-flex;
   align-items: center;
@@ -673,16 +763,143 @@ button {
   background: var(--panel-2);
   color: var(--text-2);
   cursor: pointer;
-  font-size: 15px;
   flex: none;
+  transition: color 0.16s, border-color 0.16s, background 0.16s;
 }
 .theme-toggle:hover {
   color: var(--primary);
   border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+/* 4.13 登录页（用户端与管理端共用） */
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.login-box {
+  position: relative;
+  width: 100%;
+  max-width: 404px;
+  padding: 32px 30px 28px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+.login-box__theme {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+}
+.login-box__logo {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: var(--grad-brand);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 800;
+  margin: 0 auto 14px;
+}
+.login-box__title {
+  text-align: center;
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.login-box__sub {
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text-3);
+  margin-bottom: 24px;
+}
+.login-tip {
+  margin-top: 16px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  border: 1px dashed var(--border);
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.7;
+}
+.login-foot {
+  text-align: center;
+  margin-top: 14px;
+  font-size: 12px;
+}
+.login-foot a {
+  color: var(--text-3);
+  transition: color 0.16s;
+}
+.login-foot a:hover {
+  color: var(--primary);
+}
+
+/* 4.14 指标卡（用户端个人中心 / 管理端概览共用） */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px;
+}
+.stat-card {
+  position: relative;
+  overflow: hidden;
+  padding: 16px 18px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.stat-card::after {
+  content: "";
+  position: absolute;
+  right: -26px;
+  top: -26px;
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  pointer-events: none;
+}
+.stat-card__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-3);
+  margin-bottom: 6px;
+}
+.stat-card__label .mm-icon,
+.stat-card__label .el-icon {
+  color: var(--primary);
+}
+.stat-card__value {
+  position: relative;
+  z-index: 1;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.stat-card__unit {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-3);
+  margin-left: 3px;
+}
+.stat-card__foot {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-3);
 }
 
 /* --------------------------------------------------------------------------
-   4. 工具类
+   5. 工具类
    -------------------------------------------------------------------------- */
 .mm-row {
   display: flex;
@@ -722,6 +939,16 @@ button {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
+.mm-w-auto {
+  width: auto;
+}
+/* 表单行内小标签（左侧固定宽度） */
+.mm-inline-label {
+  flex: none;
+  width: 90px;
+  font-size: 13px;
+  color: var(--text-3);
+}
 .mm-mt-8 {
   margin-top: 8px;
 }
@@ -758,7 +985,7 @@ button {
   margin-right: auto;
 }
 
-/* 滚动条隐藏（横向滚动容器） */
+/* 横向滚动容器隐藏滚动条 */
 .no-scrollbar {
   scrollbar-width: none;
 }
@@ -766,7 +993,11 @@ button {
   display: none;
 }
 
-/* Element Plus 细节对齐（管理端） */
+/* --------------------------------------------------------------------------
+   6. 第三方组件主题对齐
+   -------------------------------------------------------------------------- */
+
+/* Element Plus（管理端） */
 .el-table {
   --el-table-border-color: var(--border);
   --el-table-header-bg-color: var(--panel-2);
@@ -776,11 +1007,24 @@ button {
   --el-table-text-color: var(--text);
   --el-table-header-text-color: var(--text-2);
 }
-.el-dialog {
+.el-dialog,
+.el-drawer {
   --el-dialog-bg-color: var(--panel);
 }
 .el-card,
 .el-drawer,
 .el-popper {
   --el-bg-color-overlay: var(--panel);
+}
+
+/* Vant（用户端移动组件） */
+.van-theme-dark,
+.van-popup,
+.van-dialog {
+  --van-background: var(--panel);
+  --van-background-2: var(--panel-2);
+  --van-text-color: var(--text);
+  --van-text-color-2: var(--text-2);
+  --van-border-color: var(--border);
+  --van-primary-color: var(--primary);
 }

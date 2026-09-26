@@ -10,7 +10,9 @@
            水平滑动 = 拖动进度（跟手预览目标时间）
            左半边上下滑动 = 亮度（黑色遮罩模拟）
            右半边上下滑动 = 音量
-           单击（桌面）= 播放/暂停；单击（移动）= 显隐控制栏；双击 = 播放/暂停
+           单击 = 显示 / 隐藏控制栏；双击 = 播放 / 暂停（PC 与移动端一致）
+   [显隐]  控制栏默认隐藏；点击画面显示，再点隐藏；播放中 3 秒无操作自动隐藏，
+           暂停 / 播放结束 / 全屏切换时保持显示。
    [键盘]  空格/K 播放暂停、←→ 快退快进、↑↓ 音量、M 静音、F 全屏、W 网页全屏、
            [ ] 调速、0-9 按百分比跳转
    [业务]  续播（记住上次位置）、观看进度自动上报（心跳，用于播放次数统计）
@@ -48,6 +50,8 @@
     this._longPressing = false;
     this._gesture = null;
     this._lastTapAt = 0;
+    this._lastClickAt = 0;
+    this._clickTimer = null;
     this._webFullscreen = false;
     this._destroyed = false;
 
@@ -71,7 +75,9 @@
       (opts.poster ? ' poster="' + util.escapeHtml(opts.poster) + '"' : '') +
       '></video>' +
       '<div class="mp__dim"></div>' +
-      '<button class="mp__big-play" type="button" aria-label="播放">▶</button>' +
+      '<button class="mp__big-play" type="button" aria-label="播放" title="播放">' +
+      MM.icon('play', 26) +
+      '</button>' +
       '<div class="mp__loading mm-hide"></div>' +
       '<div class="mp__speed-badge">' + PCFG.LONG_PRESS_RATE.toFixed(1) + 'x 快进中</div>' +
       '<div class="mp__center-hint"></div>' +
@@ -87,21 +93,31 @@
       '    <div class="mp__preview">00:00</div>' +
       '  </div>' +
       '  <div class="mp__bar">' +
-      '    <button class="mp__icon-btn" data-act="play" type="button">▶</button>' +
+      '    <button class="mp__icon-btn" data-act="play" type="button" title="播放 / 暂停">' +
+      MM.icon('play', 18) +
+      '</button>' +
       '    <span class="mp__time mm-current">00:00</span>' +
-      '    <span class="mp__time" style="opacity:.6">/</span>' +
+      '    <span class="mp__time mp__time-sep">/</span>' +
       '    <span class="mp__time mm-duration">00:00</span>' +
       '    <span class="mp__spacer"></span>' +
-      '    <span class="mp__hint-tip-inline" style="font-size:11.5px;opacity:.62;margin-right:4px">长按倍速 · 左右滑动调进度 · 左半屏亮度 / 右半屏音量</span>' +
+      '    <span class="mp__bar-tip">长按倍速 · 左右滑动调进度 · 左半屏亮度 / 右半屏音量</span>' +
       '    <div class="mp__rate">' +
-      '      <button class="mp__icon-btn" data-act="rate" type="button">1.0x</button>' +
+      '      <button class="mp__icon-btn" data-act="rate" type="button" title="播放速度">1.0x</button>' +
       '    </div>' +
       '    <div class="mp__volume">' +
-      '      <button class="mp__icon-btn" data-act="mute" type="button">🔊</button>' +
-      '      <div class="mp__volume-slider"><input type="range" min="0" max="100" value="100"></div>' +
+      '      <button class="mp__icon-btn" data-act="mute" type="button" title="静音">' +
+      MM.icon('volume-high', 18) +
+      '</button>' +
+      '      <div class="mp__volume-slider">' +
+      '        <input type="range" min="0" max="100" value="100" aria-label="音量" />' +
+      '      </div>' +
       '    </div>' +
-      '    <button class="mp__icon-btn" data-act="webfull" type="button" title="网页全屏">⛶</button>' +
-      '    <button class="mp__icon-btn" data-act="fullscreen" type="button" title="全屏">⤢</button>' +
+      '    <button class="mp__icon-btn" data-act="webfull" type="button" title="网页全屏">' +
+      MM.icon('page-fullscreen', 17) +
+      '</button>' +
+      '    <button class="mp__icon-btn" data-act="fullscreen" type="button" title="全屏">' +
+      MM.icon('fullscreen', 17) +
+      '</button>' +
       '  </div>' +
       '</div>';
 
@@ -125,8 +141,10 @@
     this.btnPlay = this.container.querySelector('[data-act="play"]');
     this.btnMute = this.container.querySelector('[data-act="mute"]');
     this.btnRate = this.container.querySelector('[data-act="rate"]');
+    this.btnFullscreen = this.container.querySelector('[data-act="fullscreen"]');
+    this.btnWebfull = this.container.querySelector('[data-act="webfull"]');
     this.volumeInput = this.container.querySelector('.mp__volume input');
-    this.inlineTip = this.container.querySelector('.mp__hint-tip-inline');
+    this.inlineTip = this.container.querySelector('.mp__bar-tip');
 
     if (this.options.src) this.video.src = this.options.src;
     if (this.options.title) this.video.setAttribute('title', this.options.title);
@@ -167,14 +185,14 @@
     });
 
     v.addEventListener('play', function () {
-      self.btnPlay.textContent = '❚❚';
+      self.btnPlay.innerHTML = MM.icon('pause', 18);
       self.bigPlay.style.display = 'none';
       self._startReportTimer();
       self._autoHideControls();
       if (self.options.onPlay) self.options.onPlay();
     });
     v.addEventListener('pause', function () {
-      self.btnPlay.textContent = '▶';
+      self.btnPlay.innerHTML = MM.icon('play', 18);
       self.bigPlay.style.display = '';
       self._stopReportTimer();
       self._report(true);
@@ -199,7 +217,10 @@
     });
     v.addEventListener('volumechange', function () {
       self.volumeInput.value = String(Math.round(v.volume * 100));
-      self.btnMute.textContent = v.muted || v.volume === 0 ? '🔇' : v.volume < 0.5 ? '🔉' : '🔊';
+      self.btnMute.innerHTML = MM.icon(
+        v.muted || v.volume === 0 ? 'volume-mute' : v.volume < 0.5 ? 'volume-low' : 'volume-high',
+        18
+      );
     });
     v.addEventListener('ratechange', function () {
       self.btnRate.textContent = v.playbackRate.toFixed(1) + 'x';
@@ -237,11 +258,20 @@
       e.stopPropagation();
       self.togglePlay();
     });
+    // 大播放键（封面态）直接起播
+    this.bigPlay.addEventListener('click', function (e) {
+      e.stopPropagation();
+      self.play();
+    });
     this.container.querySelector('[data-act="mute"]').addEventListener('click', function (e) {
       e.stopPropagation();
       v.muted = !v.muted;
       if (!v.muted && v.volume === 0) v.volume = 0.6;
-      self.showCenterHint(v.muted ? '已静音' : '音量 ' + Math.round(v.volume * 100) + '%', 900);
+      self._hint(
+        v.muted ? 'volume-mute' : v.volume < 0.5 ? 'volume-low' : 'volume-high',
+        v.muted ? '已静音' : '音量 ' + Math.round(v.volume * 100) + '%',
+        900
+      );
     });
     this.container.querySelector('[data-act="fullscreen"]').addEventListener('click', function (e) {
       e.stopPropagation();
@@ -332,9 +362,6 @@
     this.controls.addEventListener('touchstart', function (e) {
       e.stopPropagation();
     });
-    this.controls.addEventListener('mousemove', function () {
-      self._showControls();
-    });
   };
 
   /* ================================================================== 手势 */
@@ -368,7 +395,8 @@
         self._pressStart = null;
         if (wasLong || !start) return;
         if (!start.moved && Date.now() - start.at < PCFG.LONG_PRESS_DELAY) {
-          self.togglePlay();
+          // 单击 = 显隐控制栏；双击 = 播放 / 暂停
+          self._handleClick();
         }
       };
       document.addEventListener('mousemove', onMove);
@@ -383,9 +411,42 @@
         var step = e.deltaY > 0 ? -0.05 : 0.05;
         v.volume = Math.max(0, Math.min(1, v.volume + step));
         v.muted = false;
-        self.showCenterHint('音量 ' + Math.round(v.volume * 100) + '%', 800);
+        self._hint(v.volume === 0 ? 'volume-mute' : v.volume < 0.5 ? 'volume-low' : 'volume-high',
+          '音量 ' + Math.round(v.volume * 100) + '%', 800);
       },
       { passive: false }
+    );
+  };
+
+  /**
+   * 区分单击与双击：
+   * 单击 -> 显示 / 隐藏控制栏；双击 -> 播放 / 暂停。
+   * 单击延后 240ms 执行，用于等待可能到来的第二次点击。
+   */
+  Player.prototype._handleClick = function () {
+    var self = this;
+    var now = Date.now();
+    if (now - this._lastClickAt < 280) {
+      if (this._clickTimer) {
+        clearTimeout(this._clickTimer);
+        this._clickTimer = null;
+      }
+      this._lastClickAt = 0;
+      this.togglePlay();
+      return;
+    }
+    this._lastClickAt = now;
+    this._clickTimer = setTimeout(function () {
+      self._clickTimer = null;
+      self._toggleControlsVisible();
+    }, 240);
+  };
+
+  /** 统一的图标 + 文案提示 */
+  Player.prototype._hint = function (iconName, text, duration) {
+    this.showCenterHint(
+      '<span class="mm-icon">' + MM.icon(iconName, 18) + '</span><span>' + text + '</span>',
+      duration
     );
   };
 
@@ -450,13 +511,9 @@
           g.targetTime = target;
           var delta = target - g.startTime;
           self.showCenterHint(
-            (delta >= 0 ? '快进 ' : '快退 ') +
-              util.formatDuration(Math.abs(delta)) +
-              '<b>' +
-              util.formatDuration(target) +
-              ' / ' +
-              util.formatDuration(duration) +
-              '</b>',
+            '<span class="mm-icon">' + MM.icon(delta >= 0 ? 'forward' : 'rewind', 18) + '</span>' +
+              '<span>' + (delta >= 0 ? '快进 ' : '快退 ') + util.formatDuration(Math.abs(delta)) +
+              '<b>' + util.formatDuration(target) + ' / ' + util.formatDuration(duration) + '</b></span>',
             0
           );
           var ratio = duration ? target / duration : 0;
@@ -468,12 +525,16 @@
           var v2 = Math.max(0, Math.min(1, g.startVolume - dy / range));
           v.volume = v2;
           v.muted = v2 === 0;
-          self.showCenterHint((v2 === 0 ? '🔇' : v2 < 0.5 ? '🔉' : '🔊') + ' ' + Math.round(v2 * 100) + '%', 0);
+          self._hint(
+            v2 === 0 ? 'volume-mute' : v2 < 0.5 ? 'volume-low' : 'volume-high',
+            Math.round(v2 * 100) + '%',
+            0
+          );
         } else {
           var range2 = self.container.clientHeight * 0.9 || PCFG.GESTURE_RANGE;
           var b = Math.max(0.05, Math.min(1, g.startBrightness - dy / range2));
           self.setBrightness(b);
-          self.showCenterHint('☀ ' + Math.round(b * 100) + '%', 0);
+          self._hint('sun', Math.round(b * 100) + '%', 0);
         }
       },
       { passive: false }
@@ -552,11 +613,11 @@
           break;
         case 'ArrowLeft':
           v.currentTime = Math.max(0, v.currentTime - (e.shiftKey ? 30 : PCFG.SEEK_STEP));
-          self.showCenterHint('⏪ ' + util.formatDuration(v.currentTime), 700);
+          self._hint('rewind', util.formatDuration(v.currentTime), 700);
           break;
         case 'ArrowRight':
           v.currentTime = Math.min(v.duration || 0, v.currentTime + (e.shiftKey ? 30 : PCFG.SEEK_STEP));
-          self.showCenterHint('⏩ ' + util.formatDuration(v.currentTime), 700);
+          self._hint('forward', util.formatDuration(v.currentTime), 700);
           break;
         case 'ArrowUp':
           v.volume = Math.min(1, v.volume + 0.05);
@@ -594,7 +655,10 @@
             handled = false;
           }
       }
-      if (handled) e.preventDefault();
+      if (handled) {
+        e.preventDefault();
+        self._showControls();
+      }
     };
     document.addEventListener('keydown', this._keyHandler);
   };
@@ -608,9 +672,15 @@
       self._report(true);
     };
     this._onFsChange = function () {
-      if (!document.fullscreenElement) {
+      var on = !!document.fullscreenElement;
+      if (!on) {
         self.container.classList.remove('mp--fullscreen');
       }
+      if (self.btnFullscreen) {
+        self.btnFullscreen.innerHTML = MM.icon(on ? 'fullscreen-exit' : 'fullscreen', 17);
+        self.btnFullscreen.title = on ? '退出全屏' : '全屏';
+      }
+      self._showControls();
     };
     document.addEventListener('visibilitychange', this._onVisibility);
     global.addEventListener('beforeunload', this._onUnload);
@@ -753,32 +823,40 @@
   };
 
   /* ============================================================== 控制栏显隐 */
+  /**
+   * 显示控制栏。
+   * @param {boolean} persist true = 常显（暂停 / 播放结束 / 全屏切换时用）；
+   *                          否则在播放中延时自动隐藏。
+   */
   Player.prototype._showControls = function (persist) {
-    var self = this;
     this.controls.classList.add('mp__controls--show');
-    if (this._controlsTimer) clearTimeout(this._controlsTimer);
-    if (!persist) this._autoHideControls();
-    if (persist) {
-      this._controlsTimer = setTimeout(function () {
-        if (!self.video.paused) self.controls.classList.remove('mp__controls--show');
-      }, PCFG.HIDE_DELAY);
+    this._clearHideTimer();
+    if (persist) return;
+    this._autoHideControls();
+  };
+
+  Player.prototype._clearHideTimer = function () {
+    if (this._controlsTimer) {
+      clearTimeout(this._controlsTimer);
+      this._controlsTimer = null;
     }
   };
 
   Player.prototype._autoHideControls = function () {
     var self = this;
-    if (this._controlsTimer) clearTimeout(this._controlsTimer);
-    if (this.isTouch) return; // 移动端不自动隐藏，避免误触
+    this._clearHideTimer();
     this._controlsTimer = setTimeout(function () {
       if (!self.video.paused) self.controls.classList.remove('mp__controls--show');
     }, PCFG.HIDE_DELAY);
   };
 
+  /** 单击画面：在「显示」与「隐藏」控制栏之间切换 */
   Player.prototype._toggleControlsVisible = function () {
     if (this.controls.classList.contains('mp__controls--show')) {
+      this._clearHideTimer();
       this.controls.classList.remove('mp__controls--show');
     } else {
-      this._showControls(true);
+      this._showControls();
     }
   };
 
@@ -889,6 +967,7 @@
     this._cancelLongPress();
     this._closeRateMenu();
     if (this._controlsTimer) clearTimeout(this._controlsTimer);
+    if (this._clickTimer) clearTimeout(this._clickTimer);
     document.removeEventListener('keydown', this._keyHandler);
     document.removeEventListener('visibilitychange', this._onVisibility);
     global.removeEventListener('beforeunload', this._onUnload);

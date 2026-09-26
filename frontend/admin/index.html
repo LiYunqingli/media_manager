@@ -18,58 +18,7 @@
   <link rel="stylesheet" href="/static/vendor/element-plus.css" />
   <link rel="stylesheet" href="/static/vendor/element-plus-dark.css" />
   <link rel="stylesheet" href="/static/css/common.css" />
-  <link rel="stylesheet" href="/static/css/web.css" />
   <link rel="stylesheet" href="/static/css/admin.css" />
-  <style>
-    .bar-chart {
-      display: flex;
-      align-items: flex-end;
-      gap: 6px;
-      height: 168px;
-      padding: 8px 4px 0;
-    }
-    .bar-col {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-end;
-      align-items: center;
-      gap: 4px;
-      height: 100%;
-      min-width: 0;
-    }
-    .bar-col__bar {
-      width: 100%;
-      max-width: 34px;
-      border-radius: 4px 4px 0 0;
-      background: linear-gradient(180deg, var(--primary), rgba(59,130,246,.35));
-      min-height: 3px;
-      transition: height .3s ease;
-    }
-    .bar-col__label {
-      font-size: 10.5px;
-      color: var(--text-3);
-      white-space: nowrap;
-      transform: scale(.92);
-    }
-    .rank-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 9px 4px;
-      border-bottom: 1px dashed var(--border);
-      font-size: 13px;
-    }
-    .rank-row:last-child { border-bottom: none; }
-    .rank-no {
-      width: 20px; height: 20px; border-radius: 5px; flex: none;
-      display: grid; place-items: center; font-size: 11px; font-weight: 700;
-      background: var(--panel-2); color: var(--text-3);
-    }
-    .rank-row:nth-child(1) .rank-no { background: var(--danger); color: #fff; }
-    .rank-row:nth-child(2) .rank-no { background: var(--warning); color: #fff; }
-    .rank-row:nth-child(3) .rank-no { background: var(--primary); color: #fff; }
-  </style>
 </head>
 <body>
   <div id="app" v-cloak>
@@ -83,42 +32,44 @@
         <!-- 核心指标 -->
         <div class="stat-grid">
           <div class="stat-card">
-            <div class="stat-card__label">🎬 视频总数</div>
+            <div class="stat-card__label"><el-icon><VideoCamera /></el-icon>视频总数</div>
             <div class="stat-card__value">{{ d.video.total }}<span class="stat-card__unit">个</span></div>
             <div class="stat-card__foot">上架 {{ d.video.online }} · 下架 {{ d.video.offline }}</div>
           </div>
           <div class="stat-card">
-            <div class="stat-card__label">👥 用户总数</div>
+            <div class="stat-card__label"><el-icon><UserFilled /></el-icon>用户总数</div>
             <div class="stat-card__value">{{ d.user.total }}<span class="stat-card__unit">人</span></div>
             <div class="stat-card__foot">管理员 {{ d.user.admin }} · 近 7 天活跃 {{ d.user.active_7d }}</div>
           </div>
           <div class="stat-card">
-            <div class="stat-card__label">👁 播放总次数</div>
+            <div class="stat-card__label"><el-icon><View /></el-icon>播放总次数</div>
             <div class="stat-card__value">{{ fmt(d.play.total) }}<span class="stat-card__unit">次</span></div>
             <div class="stat-card__foot">今日新增 {{ d.play.today }} 次</div>
           </div>
           <div class="stat-card">
-            <div class="stat-card__label">⭐ 收藏数</div>
+            <div class="stat-card__label"><el-icon><StarFilled /></el-icon>收藏数</div>
             <div class="stat-card__value">{{ fmt(d.play.favorite) }}<span class="stat-card__unit">次</span></div>
             <div class="stat-card__foot">观看记录 {{ d.play.history }} 条</div>
           </div>
           <div class="stat-card">
-            <div class="stat-card__label">⏱ 视频总时长</div>
+            <div class="stat-card__label"><el-icon><Clock /></el-icon>视频总时长</div>
             <div class="stat-card__value" style="font-size:20px">{{ d.video.duration_text }}</div>
             <div class="stat-card__foot">占用磁盘 {{ d.video.size_text }}</div>
           </div>
           <div class="stat-card">
-            <div class="stat-card__label">🗂 分类数量</div>
+            <div class="stat-card__label"><el-icon><FolderOpened /></el-icon>分类数量</div>
             <div class="stat-card__value">{{ d.category.total }}<span class="stat-card__unit">个</span></div>
             <div class="stat-card__foot">上传任务 进行中 {{ d.upload.running }}</div>
           </div>
         </div>
 
         <!-- 趋势 + 排行 -->
-        <div style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px" class="mm-wrap">
+        <div class="overview-grid">
           <div class="mm-card">
             <div class="mm-card__head">
-              <span class="mm-card__title">📈 近 {{ trend.days }} 天有效播放趋势</span>
+              <span class="mm-card__title">
+                <el-icon><TrendCharts /></el-icon>近 {{ trend.days }} 天有效播放趋势
+              </span>
               <el-radio-group v-model="trendDays" size="small" @change="loadTrend">
                 <el-radio-button :value="7">7 天</el-radio-button>
                 <el-radio-button :value="14">14 天</el-radio-button>
@@ -128,7 +79,7 @@
             <div class="mm-card__body">
               <div class="bar-chart" v-if="trend.items.length">
                 <div class="bar-col" v-for="it in trend.items" :key="it.day" :title="it.day + '：' + it.views + ' 次 / ' + it.users + ' 人'">
-                  <span style="font-size:10.5px;color:var(--text-2)">{{ it.views || '' }}</span>
+                  <span class="bar-col__value">{{ it.views || '' }}</span>
                   <div class="bar-col__bar" :style="{ height: barHeight(it.views) }"></div>
                   <span class="bar-col__label">{{ it.day.slice(5) }}</span>
                 </div>
@@ -139,7 +90,9 @@
 
           <div class="mm-card">
             <div class="mm-card__head">
-              <span class="mm-card__title">🔥 播放排行榜</span>
+              <span class="mm-card__title">
+                <el-icon><Histogram /></el-icon>播放排行榜
+              </span>
             </div>
             <div class="mm-card__body" style="padding:6px 14px 12px">
               <div class="rank-row" v-for="(v, i) in top" :key="v.id">
@@ -154,9 +107,13 @@
         </div>
 
         <!-- 分类分布 + 运行环境 -->
-        <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:16px;margin-top:16px" class="mm-wrap">
+        <div class="overview-grid overview-grid--wide">
           <div class="mm-card">
-            <div class="mm-card__head"><span class="mm-card__title">🗂 分类内容分布</span></div>
+            <div class="mm-card__head">
+              <span class="mm-card__title">
+                <el-icon><PieChart /></el-icon>分类内容分布
+              </span>
+            </div>
             <div class="mm-card__body">
               <div v-for="c in d.category.items" :key="c.category_id" style="margin-bottom:12px">
                 <div class="mm-row mm-row--between" style="font-size:12.5px;margin-bottom:4px">
@@ -170,7 +127,11 @@
           </div>
 
           <div class="mm-card">
-            <div class="mm-card__head"><span class="mm-card__title">⚙ 运行环境</span></div>
+            <div class="mm-card__head">
+              <span class="mm-card__title">
+                <el-icon><Setting /></el-icon>运行环境
+              </span>
+            </div>
             <div class="mm-card__body">
               <el-descriptions :column="2" border size="small">
                 <el-descriptions-item label="媒体处理后端">
@@ -199,7 +160,11 @@
 
         <!-- 快捷入口 -->
         <div class="mm-card mm-mt-16">
-          <div class="mm-card__head"><span class="mm-card__title">🚀 快捷操作</span></div>
+          <div class="mm-card__head">
+            <span class="mm-card__title">
+              <el-icon><Odometer /></el-icon>快捷操作
+            </span>
+          </div>
           <div class="mm-card__body mm-row mm-wrap">
             <el-button type="primary" @click="go('/admin/upload.html')">上传视频</el-button>
             <el-button @click="go('/admin/videos.html')">视频管理</el-button>
@@ -219,6 +184,7 @@
   <script src="/static/vendor/element-plus-icons.js"></script>
   <script src="/static/js/config.js"></script>
   <script src="/static/js/utils.js"></script>
+  <script src="/static/js/icons.js"></script>
   <script src="/static/js/ui.js"></script>
   <script src="/static/js/request.js"></script>
   <script src="/static/js/components-web.js"></script>

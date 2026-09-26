@@ -34,7 +34,7 @@
                class="hero__slide" :class="{ 'hero__slide--active': i === heroIndex }"
                @click="openVideo(b)">
             <img v-if="b.cover_url" :src="b.cover_url" :alt="b.title" />
-            <div v-else class="v-card__placeholder" :style="{ background: grad(b.title), fontSize: '48px' }">
+            <div v-else class="v-card__placeholder" :style="{ background: grad(b.title) }">
               {{ initials(b.title) }}
             </div>
             <div class="hero__mask"></div>
@@ -60,7 +60,10 @@
         <section class="mm-section" v-if="home.continue_watch && home.continue_watch.length">
           <div class="mm-section__head">
             <h2 class="mm-section__title">继续观看</h2>
-            <span class="mm-section__more" @click="goHistory">全部历史 →</span>
+            <span class="mm-section__more" @click="goHistory">
+              全部历史
+              <mm-icon name="chevron-right" :size="13"></mm-icon>
+            </span>
           </div>
           <div class="h-scroll no-scrollbar">
             <div class="v-card" v-for="h in home.continue_watch" :key="'c' + h.video_id" @click="openVideo(h)">
@@ -83,7 +86,7 @@
         <!-- ========================== 热门 ========================== -->
         <section class="mm-section" v-if="home.hot && home.hot.length">
           <div class="mm-section__head">
-            <h2 class="mm-section__title">🔥 热门推荐</h2>
+            <h2 class="mm-section__title">热门推荐</h2>
           </div>
           <div class="mm-grid">
             <v-card v-for="v in home.hot.slice(0, 12)" :key="'h' + v.id" :video="v"></v-card>
@@ -95,7 +98,8 @@
           <div class="mm-section__head">
             <h2 class="mm-section__title">{{ s.category.name }}</h2>
             <span class="mm-section__more" @click="goCategory(s.category.id)">
-              查看全部（{{ s.category.video_count }}）→
+              查看全部（{{ s.category.video_count }}）
+              <mm-icon name="chevron-right" :size="13"></mm-icon>
             </span>
           </div>
           <div class="mm-grid">
@@ -106,14 +110,14 @@
         <!-- ========================== 最新 ========================== -->
         <section class="mm-section" v-if="home.latest && home.latest.length">
           <div class="mm-section__head">
-            <h2 class="mm-section__title">🆕 最新上传</h2>
+            <h2 class="mm-section__title">最新上传</h2>
           </div>
           <div class="mm-grid">
             <v-card v-for="v in home.latest" :key="'n' + v.id" :video="v"></v-card>
           </div>
         </section>
 
-        <mm-empty v-if="empty" icon="🎬" text="还没有可观看的视频，请联系管理员上传或检查你的可见权限">
+        <mm-empty v-if="empty" icon="film" text="还没有可观看的视频，请联系管理员上传或检查你的可见权限">
         </mm-empty>
       </template>
 
@@ -124,6 +128,7 @@
   <script src="/static/vendor/vant.min.js"></script>
   <script src="/static/js/config.js"></script>
   <script src="/static/js/utils.js"></script>
+  <script src="/static/js/icons.js"></script>
   <script src="/static/js/ui.js"></script>
   <script src="/static/js/request.js"></script>
   <script src="/static/js/components-web.js"></script>

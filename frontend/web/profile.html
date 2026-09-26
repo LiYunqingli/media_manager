@@ -23,13 +23,13 @@
 <body>
   <div id="app" v-cloak>
     <web-shell :user="user" active="profile">
-      <div style="max-width:760px">
+      <div class="profile-wrap">
 
         <!-- 资料卡 -->
         <div class="mm-card">
           <div class="mm-card__body mm-row" style="gap:18px;align-items:center">
-            <div class="web-avatar" style="width:64px;height:64px;font-size:24px">
-              <img v-if="profile.avatar_url" :src="profile.avatar_url" />
+            <div class="mm-avatar mm-avatar--lg">
+              <img v-if="profile.avatar_url" :src="profile.avatar_url" alt="avatar" />
               <span v-else>{{ initial }}</span>
             </div>
             <div class="mm-grow">
@@ -52,15 +52,21 @@
         <!-- 统计 -->
         <div class="stat-grid" style="margin-top:16px">
           <div class="stat-card">
-            <div class="stat-card__label">⭐ 收藏视频</div>
+            <div class="stat-card__label">
+              <mm-icon name="star-filled" :size="14"></mm-icon>收藏视频
+            </div>
             <div class="stat-card__value">{{ stats.favorite_count || 0 }}<span class="stat-card__unit">个</span></div>
           </div>
           <div class="stat-card">
-            <div class="stat-card__label">🕘 观看记录</div>
+            <div class="stat-card__label">
+              <mm-icon name="clock" :size="14"></mm-icon>观看记录
+            </div>
             <div class="stat-card__value">{{ stats.history_count || 0 }}<span class="stat-card__unit">条</span></div>
           </div>
           <div class="stat-card">
-            <div class="stat-card__label">⏱ 累计观看</div>
+            <div class="stat-card__label">
+              <mm-icon name="hourglass" :size="14"></mm-icon>累计观看
+            </div>
             <div class="stat-card__value" style="font-size:22px">{{ watchText }}</div>
           </div>
         </div>
@@ -137,6 +143,7 @@
   <script src="/static/vendor/vant.min.js"></script>
   <script src="/static/js/config.js"></script>
   <script src="/static/js/utils.js"></script>
+  <script src="/static/js/icons.js"></script>
   <script src="/static/js/ui.js"></script>
   <script src="/static/js/request.js"></script>
   <script src="/static/js/components-web.js"></script>

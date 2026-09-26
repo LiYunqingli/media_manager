@@ -23,7 +23,7 @@
 <body>
   <div id="app" v-cloak>
     <web-shell :user="user" active="history">
-      <div class="mm-section__head">
+      <div class="page-head">
         <h2 class="mm-section__title">观看历史</h2>
         <div class="mm-row">
           <span class="mm-muted" style="font-size:12.5px" v-if="!loading">共 {{ total }} 条</span>
@@ -36,38 +36,38 @@
       </div>
 
       <template v-else>
-        <div class="mm-card" v-if="items.length" style="padding:8px">
-          <div class="h-item" v-for="h in items" :key="h.video_id"
-               style="display:flex;gap:12px;padding:10px;border-radius:8px;cursor:pointer"
-               @mouseenter="e => e.currentTarget.style.background = 'var(--panel-hover)'"
-               @mouseleave="e => e.currentTarget.style.background = ''"
-               @click="open(h)">
-            <div style="width:140px;aspect-ratio:16/9;border-radius:6px;overflow:hidden;background:var(--panel-2);flex:none;position:relative">
-              <img v-if="h.cover_url" :src="h.cover_url" style="width:100%;height:100%;object-fit:cover" />
-              <div v-else class="v-card__placeholder" :style="{ background: grad(h.title) }">{{ initials(h.title) }}</div>
-              <div class="v-card__progress"><span :style="{ width: Math.min(h.progress, 100) + '%' }"></span></div>
-            </div>
-            <div class="mm-grow">
-              <div style="font-size:14px;font-weight:500;margin-bottom:4px" class="mm-clamp-2">{{ h.title }}</div>
-              <div class="mm-row mm-wrap" style="gap:12px;font-size:12.5px;color:var(--text-3)">
-                <span class="mm-tag mm-tag--muted">{{ h.category_name || '未分类' }}</span>
-                <span>看到 {{ h.last_position_text }} / {{ h.duration_text }}</span>
-                <span>进度 {{ h.progress }}%</span>
-                <span v-if="h.finished" class="mm-tag mm-tag--success">已看完</span>
-                <span>累计 {{ watchText(h.watch_seconds) }}</span>
-                <span>{{ fromNow(h.watched_at) }}</span>
+        <div class="mm-card" v-if="items.length">
+          <div class="media-list">
+            <div class="media-item" v-for="h in items" :key="h.video_id" @click="open(h)">
+              <div class="media-item__cover">
+                <img v-if="h.cover_url" :src="h.cover_url" :alt="h.title" />
+                <div v-else class="v-card__placeholder" :style="{ background: grad(h.title) }">
+                  {{ initials(h.title) }}
+                </div>
+                <div class="v-card__progress"><span :style="{ width: Math.min(h.progress, 100) + '%' }"></span></div>
               </div>
-            </div>
-            <div class="mm-row" style="align-items:center">
-              <button class="mm-btn mm-btn--sm mm-btn--primary" @click.stop="open(h)">
-                {{ h.progress > 2 && !h.finished ? '继续观看' : '重新观看' }}
-              </button>
-              <button class="mm-btn mm-btn--sm" @click.stop="removeOne(h)">删除</button>
+              <div class="mm-grow">
+                <div class="media-item__title mm-clamp-2">{{ h.title }}</div>
+                <div class="media-item__meta">
+                  <span class="mm-tag mm-tag--muted">{{ h.category_name || '未分类' }}</span>
+                  <span>看到 {{ h.last_position_text }} / {{ h.duration_text }}</span>
+                  <span>进度 {{ h.progress }}%</span>
+                  <span v-if="h.finished" class="mm-tag mm-tag--success">已看完</span>
+                  <span>累计 {{ watchText(h.watch_seconds) }}</span>
+                  <span>{{ fromNow(h.watched_at) }}</span>
+                </div>
+              </div>
+              <div class="media-item__actions">
+                <button class="mm-btn mm-btn--sm mm-btn--primary" @click.stop="open(h)">
+                  {{ h.progress > 2 && !h.finished ? '继续观看' : '重新观看' }}
+                </button>
+                <button class="mm-btn mm-btn--sm" @click.stop="removeOne(h)">删除</button>
+              </div>
             </div>
           </div>
         </div>
 
-        <mm-empty v-else icon="🕘" text="暂无观看记录">
+        <mm-empty v-else icon="clock" text="暂无观看记录">
           <button class="mm-btn mm-btn--primary mm-mt-16" @click="goHome">去逛逛</button>
         </mm-empty>
 
@@ -80,6 +80,7 @@
   <script src="/static/vendor/vant.min.js"></script>
   <script src="/static/js/config.js"></script>
   <script src="/static/js/utils.js"></script>
+  <script src="/static/js/icons.js"></script>
   <script src="/static/js/ui.js"></script>
   <script src="/static/js/request.js"></script>
   <script src="/static/js/components-web.js"></script>

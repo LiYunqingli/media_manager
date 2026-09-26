@@ -28,25 +28,25 @@
         <div>
           <!-- 分类头 -->
           <div class="mm-card mm-mb-16" v-if="category">
-            <div class="mm-card__body mm-row mm-wrap" style="align-items:flex-start">
-              <div style="width:120px;aspect-ratio:16/9;border-radius:8px;overflow:hidden;background:var(--panel-2);flex:none">
-                <img v-if="category.cover_url" :src="category.cover_url" style="width:100%;height:100%;object-fit:cover" />
+            <div class="mm-card__body category-head">
+              <div class="category-head__cover">
+                <img v-if="category.cover_url" :src="category.cover_url" :alt="category.name" />
                 <div v-else class="v-card__placeholder" :style="{ background: grad(category.name) }">
                   {{ initials(category.name) }}
                 </div>
               </div>
               <div class="mm-grow">
-                <h1 style="font-size:19px;margin-bottom:6px">{{ category.name }}</h1>
-                <p style="font-size:13px;color:var(--text-3);margin:0">
+                <h1 class="category-head__name">{{ category.name }}</h1>
+                <p class="category-head__desc">
                   {{ category.description || '该分类暂无描述' }}
                 </p>
-                <div class="mm-row mm-mt-8" style="gap:14px;font-size:12.5px;color:var(--text-3)">
+                <div class="category-head__stat">
                   <span>共 {{ total }} 个视频</span>
                   <span>第 {{ page }} / {{ pages }} 页</span>
                 </div>
               </div>
               <div class="mm-row">
-                <select class="mm-select" v-model="orderBy" @change="reload" style="width:auto">
+                <select class="mm-select mm-w-auto" v-model="orderBy" @change="reload" aria-label="排序方式">
                   <option value="created_at">最新发布</option>
                   <option value="view_count">最多播放</option>
                   <option value="duration">时长优先</option>
@@ -61,7 +61,7 @@
             <div class="mm-grid" v-if="videos.length">
               <v-card v-for="v in videos" :key="v.id" :video="v"></v-card>
             </div>
-            <mm-empty v-else icon="📂" text="该分类下暂时没有视频"></mm-empty>
+            <mm-empty v-else icon="folder" text="该分类下暂时没有视频"></mm-empty>
             <mm-pager :page="page" :pages="pages" :total="total" @change="changePage"></mm-pager>
           </template>
         </div>
@@ -70,14 +70,16 @@
         <aside class="related-panel">
           <div class="mm-card">
             <div class="mm-card__head">
-              <span class="mm-card__title">🧭 换个分类看看</span>
+              <span class="mm-card__title">
+                <mm-icon name="compass" :size="15"></mm-icon>换个分类看看
+              </span>
             </div>
-            <div class="mm-card__body" style="padding:8px">
+            <div class="mm-card__body mm-card__body--tight">
               <div class="related-list" style="max-height:none">
                 <div class="v-item" v-for="c in otherCategories" :key="'c' + c.id" @click="goCategory(c.id)">
-                  <div class="v-item__cover" style="width:96px">
-                    <img v-if="c.cover_url" :src="c.cover_url" />
-                    <div v-else class="v-card__placeholder" :style="{ background: grad(c.name), fontSize:14 }">
+                  <div class="v-item__cover v-item__cover--sm">
+                    <img v-if="c.cover_url" :src="c.cover_url" :alt="c.name" />
+                    <div v-else class="v-card__placeholder" :style="{ background: grad(c.name) }" style="font-size:14px">
                       {{ initials(c.name) }}
                     </div>
                   </div>
@@ -92,9 +94,11 @@
 
           <div class="mm-card mm-mt-16" v-if="hot.length">
             <div class="mm-card__head">
-              <span class="mm-card__title">🔥 全站热门</span>
+              <span class="mm-card__title">
+                <mm-icon name="fire" :size="15"></mm-icon>全站热门
+              </span>
             </div>
-            <div class="mm-card__body" style="padding:8px">
+            <div class="mm-card__body mm-card__body--tight">
               <v-item v-for="(v, i) in hot" :key="'h' + v.id" :video="v" :index="i + 1"></v-item>
             </div>
           </div>
@@ -108,6 +112,7 @@
   <script src="/static/vendor/vant.min.js"></script>
   <script src="/static/js/config.js"></script>
   <script src="/static/js/utils.js"></script>
+  <script src="/static/js/icons.js"></script>
   <script src="/static/js/ui.js"></script>
   <script src="/static/js/request.js"></script>
   <script src="/static/js/components-web.js"></script>

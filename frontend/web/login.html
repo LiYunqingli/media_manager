@@ -24,10 +24,11 @@
 <body>
   <div id="app" v-cloak>
     <div class="login-page">
-      <div class="login-box" style="position:relative">
-        <button class="theme-toggle" style="position:absolute;right:14px;top:14px"
-                @click="toggleTheme" :title="theme === 'dark' ? '切换到亮色' : '切换到暗色'">
-          {{ theme === 'dark' ? '☀' : '☾' }}
+      <div class="login-box">
+        <button class="theme-toggle login-box__theme"
+                @click="toggleTheme" :title="theme === 'dark' ? '切换到亮色' : '切换到暗色'"
+                :aria-label="theme === 'dark' ? '切换到亮色' : '切换到暗色'">
+          <mm-icon :name="theme === 'dark' ? 'sun' : 'moon'" :size="17"></mm-icon>
         </button>
 
         <div class="login-box__logo">M</div>
@@ -57,8 +58,8 @@
           系统不开放自助注册，账号由管理员在<strong>管理端</strong>创建并分配可见分类。<br />
           内置测试账号：<span class="mm-mono">user1 / user123</span>
         </div>
-        <div style="text-align:center;margin-top:14px;font-size:12px">
-          <a href="/admin/login.html" style="color:var(--text-3)">管理员入口 →</a>
+        <div class="login-foot">
+          <a href="/admin/login.html">管理员入口</a>
         </div>
       </div>
     </div>
@@ -68,6 +69,7 @@
   <script src="/static/vendor/vant.min.js"></script>
   <script src="/static/js/config.js"></script>
   <script src="/static/js/utils.js"></script>
+  <script src="/static/js/icons.js"></script>
   <script src="/static/js/ui.js"></script>
   <script src="/static/js/request.js"></script>
   <script src="/static/js/components-web.js"></script>

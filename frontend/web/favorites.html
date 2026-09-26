@@ -23,7 +23,7 @@
 <body>
   <div id="app" v-cloak>
     <web-shell :user="user" active="favorites">
-      <div class="mm-section__head">
+      <div class="page-head">
         <h2 class="mm-section__title">我的收藏</h2>
         <span class="mm-muted" style="font-size:12.5px" v-if="!loading">共 {{ total }} 个</span>
       </div>
@@ -32,13 +32,12 @@
 
       <template v-else>
         <div class="mm-grid" v-if="videos.length">
-          <div v-for="v in videos" :key="v.video_id" style="position:relative">
+          <div v-for="v in videos" :key="v.video_id" class="card-wrap">
             <v-card :video="cardOf(v)"></v-card>
-            <button class="mm-btn mm-btn--sm" style="position:absolute;right:8px;top:8px;background:rgba(0,0,0,.6);color:#fff;border:none"
-                    @click.stop="unfavorite(v)">取消收藏</button>
+            <button class="card-remove" @click.stop="unfavorite(v)">取消收藏</button>
           </div>
         </div>
-        <mm-empty v-else icon="⭐" text="还没有收藏任何视频">
+        <mm-empty v-else icon="star" text="还没有收藏任何视频">
           <button class="mm-btn mm-btn--primary mm-mt-16" @click="goHome">去逛逛</button>
         </mm-empty>
         <mm-pager :page="page" :pages="pages" :total="total" @change="changePage"></mm-pager>
@@ -50,6 +49,7 @@
   <script src="/static/vendor/vant.min.js"></script>
   <script src="/static/js/config.js"></script>
   <script src="/static/js/utils.js"></script>
+  <script src="/static/js/icons.js"></script>
   <script src="/static/js/ui.js"></script>
   <script src="/static/js/request.js"></script>
   <script src="/static/js/components-web.js"></script>

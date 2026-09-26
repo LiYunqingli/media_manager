@@ -18,7 +18,6 @@
   <link rel="stylesheet" href="/static/vendor/element-plus.css" />
   <link rel="stylesheet" href="/static/vendor/element-plus-dark.css" />
   <link rel="stylesheet" href="/static/css/common.css" />
-  <link rel="stylesheet" href="/static/css/web.css" />
   <link rel="stylesheet" href="/static/css/admin.css" />
 </head>
 <body>
@@ -27,7 +26,9 @@
 
       <!-- 工具栏 -->
       <div class="toolbar">
-        <span class="toolbar__title">🎬 视频库（{{ total }}）</span>
+        <span class="toolbar__title">
+          <el-icon><VideoCamera /></el-icon>视频库（{{ total }}）
+        </span>
         <div class="mm-row mm-wrap">
           <el-input v-model.trim="query.keyword" placeholder="搜索标题/简介" clearable style="width:190px"
                     @keyup.enter="reload" @clear="reload"></el-input>
@@ -125,7 +126,9 @@
             <template #default="{ row }">
               <el-button size="small" @click="openEdit(row)">编辑</el-button>
               <el-dropdown trigger="click" @command="onCommand($event, row)">
-                <el-button size="small">更多<el-icon><arrow-down></arrow-down></el-icon></el-button>
+                <el-button size="small">
+                  更多<el-icon><ArrowDown /></el-icon>
+                </el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item command="frame">从关键帧重抽封面</el-dropdown-item>
@@ -198,7 +201,7 @@
             </div>
             <div class="mm-field__hint">
               视频ID #{{ current.id }} · 时长 {{ current.duration_text }} · 大小 {{ current.size_text }}
-              （{{ current.file_exists ? '文件存在' : '⚠ 文件缺失' }}）
+              <span v-if="!current.file_exists" class="mm-tag mm-tag--danger" style="margin-left:6px">文件缺失</span>
             </div>
           </div>
         </div>
@@ -226,6 +229,7 @@
   <script src="/static/vendor/element-plus-icons.js"></script>
   <script src="/static/js/config.js"></script>
   <script src="/static/js/utils.js"></script>
+  <script src="/static/js/icons.js"></script>
   <script src="/static/js/ui.js"></script>
   <script src="/static/js/request.js"></script>
   <script src="/static/js/components-web.js"></script>

@@ -23,10 +23,12 @@
 <body>
   <div id="app" v-cloak>
     <div class="login-page">
-      <div class="login-box" style="position:relative">
-        <button class="theme-toggle" style="position:absolute;right:14px;top:14px"
-                @click="toggleTheme" :title="theme === 'dark' ? '切换到亮色' : '切换到暗色'">
-          {{ theme === 'dark' ? '☀' : '☾' }}
+      <div class="login-box">
+        <button class="theme-toggle login-box__theme"
+                @click="toggleTheme" :title="theme === 'dark' ? '切换到亮色' : '切换到暗色'"
+                :aria-label="theme === 'dark' ? '切换到亮色' : '切换到暗色'">
+          <el-icon v-if="theme === 'dark'"><Sunny /></el-icon>
+          <el-icon v-else><Moon /></el-icon>
         </button>
 
         <div class="login-box__logo">M</div>
@@ -55,8 +57,8 @@
           仅管理员账号可登录本入口。<br />
           内置账号：<span class="mm-mono">admin / admin123</span>
         </div>
-        <div style="text-align:center;margin-top:14px;font-size:12px">
-          <a href="/login.html" style="color:var(--text-3)">← 返回用户端登录</a>
+        <div class="login-foot">
+          <a href="/login.html">返回用户端登录</a>
         </div>
       </div>
     </div>
@@ -68,6 +70,7 @@
   <script src="/static/vendor/element-plus-icons.js"></script>
   <script src="/static/js/config.js"></script>
   <script src="/static/js/utils.js"></script>
+  <script src="/static/js/icons.js"></script>
   <script src="/static/js/ui.js"></script>
   <script src="/static/js/request.js"></script>
   <script src="/static/js/components-web.js"></script>

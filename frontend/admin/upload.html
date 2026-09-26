@@ -18,7 +18,6 @@
   <link rel="stylesheet" href="/static/vendor/element-plus.css" />
   <link rel="stylesheet" href="/static/vendor/element-plus-dark.css" />
   <link rel="stylesheet" href="/static/css/common.css" />
-  <link rel="stylesheet" href="/static/css/web.css" />
   <link rel="stylesheet" href="/static/css/admin.css" />
 </head>
 <body>
@@ -27,16 +26,20 @@
 
       <!-- ===================== 上传区 ===================== -->
       <div class="toolbar">
-        <span class="toolbar__title">📤 分片上传</span>
+        <span class="toolbar__title">
+          <el-icon><Upload /></el-icon>分片上传
+        </span>
         <div class="mm-row mm-wrap">
-          <span style="font-size:12.5px;color:var(--text-3)">默认分类</span>
+          <span class="mm-muted" style="font-size:12.5px">默认分类</span>
           <el-select v-model="defaultCategory" placeholder="选择分类" size="default" style="width:170px">
             <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id"></el-option>
           </el-select>
-          <span style="font-size:12.5px;color:var(--text-3)">并发分片</span>
+          <span class="mm-muted" style="font-size:12.5px">并发分片</span>
           <el-input-number v-model="concurrency" :min="1" :max="6" size="default" style="width:110px"></el-input-number>
           <el-checkbox v-model="autoStart">添加后自动开始</el-checkbox>
-          <el-button @click="loadSessions">中断任务</el-button>
+          <el-button @click="loadSessions">
+            <el-icon><Refresh /></el-icon>刷新会话
+          </el-button>
           <el-button @click="cleanup">清理过期会话</el-button>
         </div>
       </div>
@@ -44,7 +47,9 @@
       <div class="upload-drop" :class="{ 'upload-drop--over': dragOver }"
            @click="pickFiles" @dragover.prevent="dragOver = true"
            @dragleave.prevent="dragOver = false" @drop.prevent="onDrop">
-        <div class="upload-drop__icon">⬆</div>
+        <div class="upload-drop__icon">
+          <el-icon><UploadFilled /></el-icon>
+        </div>
         <div class="upload-drop__title">点击选择视频文件，或将文件拖到此处</div>
         <div class="upload-drop__sub">
           支持多选 · 服务端分片大小 {{ chunkSizeText }} · 自动续传 / 秒传 / 关键帧封面
@@ -170,11 +175,13 @@
       <!-- 中断任务（可续传） -->
       <div class="mm-card mm-mt-16" v-if="sessions.length">
         <div class="mm-card__head">
-          <span class="mm-card__title">♻ 未完成的上传会话（可续传）</span>
+          <span class="mm-card__title">
+            <el-icon><Refresh /></el-icon>未完成的上传会话（可续传）
+          </span>
           <span class="mm-muted" style="font-size:12px">共 {{ sessions.length }} 条</span>
         </div>
         <div class="mm-card__body" style="padding:8px 14px">
-          <div class="rank-row" v-for="s in sessions" :key="s.upload_id" style="display:flex;gap:10px;align-items:center;font-size:12.5px;border-bottom:1px dashed var(--border);padding:8px 0">
+          <div class="session-row" v-for="s in sessions" :key="s.upload_id">
             <span class="mm-tag mm-tag--muted">{{ s.stage_text }}</span>
             <span class="mm-grow mm-ellipsis">{{ s.file_name }}</span>
             <span class="mm-muted">{{ s.total_size_text }}</span>
@@ -187,7 +194,11 @@
 
       <!-- 说明 -->
       <div class="mm-card mm-mt-16">
-        <div class="mm-card__head"><span class="mm-card__title">ℹ 分片上传流程说明</span></div>
+        <div class="mm-card__head">
+          <span class="mm-card__title">
+            <el-icon><InfoFilled /></el-icon>分片上传流程说明
+          </span>
+        </div>
         <div class="mm-card__body" style="font-size:13px;color:var(--text-2);line-height:1.85">
           <p style="margin:0 0 6px">
             <b>① 分配</b>：前端先计算文件特征值请求服务端，服务端返回 upload_id、分片大小与总分片数；
@@ -221,6 +232,7 @@
   <script src="/static/vendor/element-plus-icons.js"></script>
   <script src="/static/js/config.js"></script>
   <script src="/static/js/utils.js"></script>
+  <script src="/static/js/icons.js"></script>
   <script src="/static/js/ui.js"></script>
   <script src="/static/js/request.js"></script>
   <script src="/static/js/components-web.js"></script>
