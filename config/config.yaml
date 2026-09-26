@@ -52,7 +52,7 @@ security:
   # 登录失败锁定：连续失败次数上限（0 = 不锁定）
   login_max_fail: 0
   # 是否强制用户首次登录修改密码
-  force_change_password: false
+  force_change_password: true
 
 # -----------------------------------------------------------------------------
 # 存储
@@ -168,7 +168,7 @@ business:
   # 前端上报观看进度的心跳间隔（秒）
   heartbeat_interval_seconds: 5
   # 进度达到该百分比视为「看完」
-  finished_percent: 95
+  finished_percent: 98
   # 「继续观看」列表最多返回条数
   continue_watch_limit: 12
   # 相关推荐返回条数（同分类优先）
@@ -182,7 +182,7 @@ business:
 # 日志
 # -----------------------------------------------------------------------------
 log:
-  level: "DEBUG" # DEBUG / INFO / WARNING / ERROR
+  level: "INFO" # DEBUG / INFO / WARNING / ERROR
   console: true
   file: true
   file_name: "backend.log"
