@@ -7,9 +7,14 @@
 --  【重要约定】
 --  1. 该文件只承载「可一次性初始化」的全量结构 + 基础数据。
 --  2. 后续任何数据库变更，禁止直接改本文件，请统一写入同目录 update.sql。
---  3. 当 update.sql 被使用到第 3 次时，把它的内容整体追加到本文件末尾（并调整
---     基线，使本文件重新可从零构建），然后清空 update.sql 重新开始计数。
+--  3. 当 update.sql 累计到第 3 次变更（或按需提前合并）时，把它的内容整体合并进
+--     本文件 —— 新增表按序号追加到末尾，字段/索引变更直接改对应表定义 —— 使本文件
+--     重新成为一个「可从零构建」的基线，然后清空 update.sql、计数归零。
 --     详见 doc/02-数据库设计.md。
+--
+--  【基线版本】 v1.1.0
+--    v1.0.0  初始 10 张表 + 内置账号与示例分类
+--    v1.1.0  合并 update.sql 变更 #1：新增表 11 `download_task`（m3u8 下载导入任务）
 -- =============================================================================
 
 SET NAMES utf8mb4;
@@ -226,6 +231,51 @@ CREATE TABLE `upload_chunk` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_upload_chunk` (`upload_id`, `chunk_index`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='上传分片记录';
+
+-- -----------------------------------------------------------------------------
+-- 11. m3u8 链接下载导入任务
+--     2026-09-26 由 update.sql 变更 #1 合并入基线。
+--     承载「链接 -> 下载 -> 入库」全过程状态（底层为 N_m3u8DL-RE），字段语义与
+--     upload_session 对齐，便于前端复用同一套进度展示；供管理端页面与浏览器插件
+--     （X-API-Token 免登录通道）共同使用。
+-- -----------------------------------------------------------------------------
+DROP TABLE IF EXISTS `download_task`;
+CREATE TABLE `download_task` (
+  `task_id`      VARCHAR(40)   NOT NULL COMMENT '任务ID（uuid hex）',
+  `user_id`      INT UNSIGNED  NOT NULL COMMENT '任务归属用户',
+  `source`       VARCHAR(24)   NOT NULL DEFAULT 'admin'
+                 COMMENT '来源: admin=管理端页面 / api=插件或脚本（X-API-Token）',
+  `url`          TEXT          NOT NULL COMMENT 'm3u8/mpd 链接',
+  `headers`      TEXT          NULL     COMMENT '额外请求头 JSON（Cookie/Referer/UA）',
+  `title`        VARCHAR(255)  NOT NULL DEFAULT '' COMMENT '视频名称',
+  `cover_url`    VARCHAR(1024) NOT NULL DEFAULT '' COMMENT '远程封面地址',
+  `category_id`  INT UNSIGNED  NOT NULL DEFAULT 0 COMMENT '目标分类',
+  `description`  TEXT          NULL     COMMENT '视频简介',
+  `sort`         INT           NOT NULL DEFAULT 0 COMMENT '排序值',
+  `stage`        VARCHAR(24)   NOT NULL DEFAULT 'queued'
+                 COMMENT '阶段: queued/downloading/muxing/ingesting/probing/covering/finished/failed/cancelled',
+  `percent`      FLOAT         NOT NULL DEFAULT 0 COMMENT '整体百分比 0-100',
+  `total_bytes`  BIGINT        NOT NULL DEFAULT 0 COMMENT '预计/已下载总字节',
+  `done_bytes`   BIGINT        NOT NULL DEFAULT 0 COMMENT '已下载字节',
+  `speed`        BIGINT        NOT NULL DEFAULT 0 COMMENT '瞬时速度 字节/秒',
+  `eta`          INT           NOT NULL DEFAULT 0 COMMENT '预计剩余秒数',
+  `staging_dir`  VARCHAR(500)  NOT NULL DEFAULT '' COMMENT '下载暂存目录（相对 storage）',
+  `file_path`    VARCHAR(500)  NOT NULL DEFAULT '' COMMENT '视频落盘路径（相对 storage）',
+  `cover`        VARCHAR(500)  NOT NULL DEFAULT '' COMMENT '封面落盘路径（相对 storage）',
+  `video_id`     INT UNSIGNED  NOT NULL DEFAULT 0 COMMENT '入库产生的视频ID',
+  `message`      VARCHAR(500)  NOT NULL DEFAULT '' COMMENT '阶段提示',
+  `error`        VARCHAR(500)  NOT NULL DEFAULT '' COMMENT '错误信息',
+  `log_tail`     TEXT          NULL     COMMENT 'N_m3u8DL-RE 输出尾部（排障用）',
+  `elapsed`      FLOAT         NOT NULL DEFAULT 0 COMMENT '耗时（秒）',
+  `created_at`   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `started_at`   DATETIME      NULL,
+  `finished_at`  DATETIME      NULL,
+  `updated_at`   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`task_id`),
+  KEY `idx_stage` (`stage`),
+  KEY `idx_user` (`user_id`),
+  KEY `idx_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='m3u8 链接下载导入任务';
 
 SET FOREIGN_KEY_CHECKS = 1;
 
