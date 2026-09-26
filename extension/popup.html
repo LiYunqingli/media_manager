@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>m3u8 嗅探器</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="bar top">
+    <div class="brand">
+      <span class="dot" id="status-dot"></span>
+      <h1>m3u8 嗅探器</h1>
+    </div>
+    <span class="count" id="count">0</span>
+  </header>
+
+  <p class="hint" id="hint">正在读取…</p>
+
+  <section class="title-bar" id="title-panel" hidden>
+    <span class="title-text" id="page-title"></span>
+    <button class="btn mini" id="copy-title" type="button">复制</button>
+  </section>
+
+  <section class="cover" id="cover-panel" hidden>
+    <div class="cover-head">
+      <span class="cover-title">封面图</span>
+      <button class="btn mini" id="copy-cover" type="button">复制</button>
+    </div>
+    <div class="cover-body">
+      <img class="cover-thumb" id="cover-thumb" alt="" referrerpolicy="no-referrer" />
+      <div class="cover-url" id="cover-url"></div>
+    </div>
+    <p class="cover-more" id="cover-more" hidden></p>
+  </section>
+
+  <ul class="list" id="list"></ul>
+
+  <footer class="bar bottom">
+    <button class="btn primary" id="copy-all" type="button">一键复制</button>
+    <button class="btn ghost" id="clear" type="button">清空</button>
+  </footer>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

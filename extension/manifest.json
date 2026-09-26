@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "m3u8 嗅探器",
+  "version": "0.1.0",
+  "description": "捕获视频页请求中的 m3u8 地址并展示，供 MediaManager 下载导入。",
+  "permissions": ["webRequest", "storage", "tabs", "scripting"],
+  "host_permissions": ["*://*/*"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "m3u8 嗅探器",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

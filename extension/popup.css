@@ -1,0 +1,348 @@
+/* ---------------------------------------------------------------------------
+   m3u8 嗅探器 · popup 样式
+   暗色钢蓝为主，跟随系统亮色自动切换。
+   popup 的宽高必须写死在一个窄区间里：Chrome 不给滚动条容器自适应，
+   内容再多也只到 600px，超出部分由 .list 自己滚。
+--------------------------------------------------------------------------- */
+
+:root {
+  --bg: #0f1520;
+  --panel: #16202e;
+  --panel-hover: #1c2838;
+  --line: #26364b;
+  --text: #dce6f2;
+  --muted: #8397b0;
+  --accent: #5b9bd5;
+  --accent-strong: #7db4e4;
+  --accent-soft: rgba(91, 155, 213, 0.14);
+  --ok: #4ec9a5;
+  --warn: #d9a05b;
+  --mono: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, monospace;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f4f7fb;
+    --panel: #ffffff;
+    --panel-hover: #eef3fa;
+    --line: #d6e0ec;
+    --text: #1c2836;
+    --muted: #61748c;
+    --accent: #2f6ea8;
+    --accent-strong: #245b8c;
+    --accent-soft: rgba(47, 110, 168, 0.1);
+    --ok: #1f9d78;
+    --warn: #a8691c;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* 封面缩略图要能随时藏起来（图挂了 / 没抓到），别让 flex 之类的 display 盖掉它 */
+[hidden] {
+  display: none !important;
+}
+
+body {
+  width: 400px;
+  min-height: 200px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.5 system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+/* --- 顶栏 / 底栏 --------------------------------------------------------- */
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--panel);
+}
+
+.bar.top {
+  border-bottom: 1px solid var(--line);
+}
+
+.bar.bottom {
+  border-top: 1px solid var(--line);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.brand h1 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex: none;
+}
+
+.dot.ok {
+  background: var(--ok);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent);
+}
+
+.dot.warn {
+  background: var(--warn);
+}
+
+.count {
+  flex: none;
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* --- 提示条 -------------------------------------------------------------- */
+
+.hint {
+  margin: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.hint.ok {
+  color: var(--ok);
+}
+
+.hint.warn {
+  color: var(--warn);
+}
+
+/* --- 标题 ---------------------------------------------------------------- */
+
+.title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 6px 0;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+}
+
+.title-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  user-select: text;
+}
+
+/* --- 封面 ---------------------------------------------------------------- */
+
+.cover {
+  margin: 6px;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+}
+
+.cover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.cover-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: var(--accent-strong);
+}
+
+.cover-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.cover-thumb {
+  flex: none;
+  width: 72px;
+  height: 40px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+}
+
+.cover-url {
+  flex: 1;
+  min-width: 0;
+  max-height: 40px;
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.45;
+  word-break: break-all;
+  color: var(--text);
+  user-select: text;
+}
+
+.cover-more {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* --- 列表 ---------------------------------------------------------------- */
+
+.list {
+  flex: 1;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  overflow-y: auto;
+  max-height: 420px;
+}
+
+.list:empty::after {
+  content: "";
+}
+
+.item {
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  margin-bottom: 6px;
+}
+
+.item:last-child {
+  margin-bottom: 0;
+}
+
+.item:hover {
+  background: var(--panel-hover);
+}
+
+.item .row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+
+.badge {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.meta {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.url {
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.45;
+  word-break: break-all;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  user-select: text;
+}
+
+/* --- 按钮 ---------------------------------------------------------------- */
+
+.btn {
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.btn.primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: #fff;
+}
+
+.btn.ghost {
+  background: transparent;
+}
+
+.btn.mini {
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 5px;
+  flex: none;
+}
+
+.btn.mini.done {
+  border-color: var(--ok);
+  color: var(--ok);
+}
