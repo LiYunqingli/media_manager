@@ -159,6 +159,26 @@ def latest_re_tag() -> str:
     return match.group(1)
 
 
+def _previous_tool(key: str) -> dict:
+    """读取上次安装记录里某个工具的条目。
+
+    「已存在则跳过」的分支不重新下载，因此拿不到 ``source`` / ``files``；
+    若不继承旧记录，第二次运行会把 manifest 里的来源信息抹成空
+    （写入是整体覆盖，不是按字段合并），排查时看不出工具是从哪来的。
+    """
+    try:
+        data = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {}
+    items = data.get("tools") or []
+    if isinstance(items, dict):  # 兼容 {key: entry} 形式
+        items = list(items.values())
+    for item in items:
+        if isinstance(item, dict) and item.get("key") == key:
+            return item
+    return {}
+
+
 def install_re(*, force: bool) -> Tool:
     system = platform.system().lower()
     machine = platform.machine().lower()
@@ -178,6 +198,9 @@ def install_re(*, force: bool) -> Tool:
 
     if exe.exists() and not force:
         tool.version = existing_re_version(exe) or tag
+        prev = _previous_tool("re")
+        tool.source = prev.get("source", "") or ""
+        tool.files = prev.get("files", []) or []
         print(f"  ✓ N_m3u8DL-RE 已存在（{tool.version}），跳过下载")
         tool.size = exe.stat().st_size
         return tool
@@ -255,6 +278,8 @@ def install_ffmpeg(*, force: bool) -> Tool:
 
     if target.exists() and not force:
         tool.version = ffmpeg_version(target)
+        prev = _previous_tool("ffmpeg")
+        tool.source = prev.get("source", "") or ""
         print(f"  ✓ ffmpeg 已存在（{tool.version}），跳过下载")
         tool.size = target.stat().st_size
         return tool
