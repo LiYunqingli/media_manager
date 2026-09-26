@@ -59,6 +59,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("%s 已停止", settings.get("app.name"))
 
 
+class _FreshStaticFiles(StaticFiles):
+    """前端资源专用静态服务：附加 ``Cache-Control: no-cache``。
+
+    前端 JS/CSS 的引用不带哈希指纹。当响应缺少 ``Cache-Control`` 时，浏览器会按
+    ``Last-Modified`` 做「启发式缓存」，于是**改动后页面仍在执行旧脚本**——典型症状
+    就是已修的报错在用户不硬刷新时依旧复现（要按 Ctrl+F5 才好）。
+
+    ``no-cache`` 的含义是「使用缓存前必须先向服务器校验」，配合 ETag / 304 几乎
+    没有额外开销，但能保证前端改动即时生效。媒体文件仍用普通 ``StaticFiles``，
+    大文件应当被浏览器正常缓存。
+    """
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers.setdefault("cache-control", "no-cache")
+        return response
+
+
 def _mount_frontend(app: FastAPI, settings) -> None:
     """挂载前端页面与静态资源。
 
@@ -70,7 +88,7 @@ def _mount_frontend(app: FastAPI, settings) -> None:
     web_dir = FRONTEND_DIR / "web"
 
     if static_dir.exists():
-        app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+        app.mount("/static", _FreshStaticFiles(directory=str(static_dir)), name="static")
 
         # 浏览器默认会请求 /favicon.ico，指向内置 SVG 图标，避免无意义的 404
         @app.get("/favicon.ico", include_in_schema=False)
@@ -96,7 +114,7 @@ def _mount_frontend(app: FastAPI, settings) -> None:
         def _admin_slash() -> RedirectResponse:
             return RedirectResponse(url="/admin/")
 
-        app.mount("/admin", StaticFiles(directory=str(admin_dir), html=True), name="admin")
+        app.mount("/admin", _FreshStaticFiles(directory=str(admin_dir), html=True), name="admin")
     else:
         logger.warning("缺少管理端目录: %s", admin_dir)
 
@@ -129,14 +147,14 @@ def _mount_frontend(app: FastAPI, settings) -> None:
     # 用户端
     if web_dir.exists():
         if default_site == "web":
-            app.mount("/", StaticFiles(directory=str(web_dir), html=True), name="web")
+            app.mount("/", _FreshStaticFiles(directory=str(web_dir), html=True), name="web")
         else:
             # 同样补一个无尾斜杠跳转
             @app.get("/web", include_in_schema=False)
             def _web_slash() -> RedirectResponse:
                 return RedirectResponse(url="/web/")
 
-            app.mount("/web", StaticFiles(directory=str(web_dir), html=True), name="web")
+            app.mount("/web", _FreshStaticFiles(directory=str(web_dir), html=True), name="web")
     else:
         logger.warning("缺少用户端目录: %s", web_dir)
 

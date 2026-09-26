@@ -9,25 +9,8 @@
   var MM = (global.MM = global.MM || {});
   var util = MM.util;
 
-  /* --------------------------------------------------- Vant 能力统一封装 */
-  MM.vant = {
-    /** 轻提示：优先用 Vant，缺失时回退到自研 toast */
-    toast: function (message, type) {
-      var v = global.vant;
-      if (v && v.showToast) {
-        v.showToast({ message: message, type: type || 'text', duration: 2000 });
-      } else {
-        MM.ui.toast(message, type === 'fail' ? 'error' : type === 'success' ? 'success' : 'info');
-      }
-    },
-    confirm: function (message, title) {
-      var v = global.vant;
-      if (v && v.showConfirmDialog) {
-        return v.showConfirmDialog({ title: title || '提示', message: message });
-      }
-      return MM.ui.confirm(message);
-    }
-  };
+  /* --------------------------------------------------- Vant 能力统一封装
+     MM.vant 已统一在 ui.js 中定义（两端共用），此处不再重复定义。 */
 
   /* ---------------------------------------------------------------- 顶栏 */
   var WebShell = {

@@ -164,6 +164,8 @@
     v.addEventListener('loadedmetadata', function () {
       self.timeDuration.textContent = util.formatDuration(v.duration);
       self.bigPlay.style.display = 'none';
+      // 元数据就绪后才知道真实宽高比，此时调整容器尺寸
+      self._applyFit();
 
       // 续播
       var last = Number(self.options.lastPosition || 0);
@@ -676,6 +678,9 @@
       if (!on) {
         self.container.classList.remove('mp--fullscreen');
       }
+      // 原生全屏需铺满屏幕；退出后按视频比例恢复容器尺寸
+      if (on) self._clearFit();
+      else self._applyFit();
       if (self.btnFullscreen) {
         self.btnFullscreen.innerHTML = MM.icon(on ? 'fullscreen-exit' : 'fullscreen', 17);
         self.btnFullscreen.title = on ? '退出全屏' : '全屏';
@@ -800,11 +805,50 @@
     }
   };
 
+  /**
+   * 按视频真实宽高比调整播放器容器。
+   *
+   * 容器样式里默认写死 16:9，竖屏视频（手机拍摄很常见）放进去只会剩一条窄竖条，
+   * 两侧全是黑边。这里改用视频自身的比例，并把视口高度的 ``MAX_HEIGHT_VH`` %
+   * 作为高度上限；上限一旦生效，用 ``max-width`` 反推宽度，
+   * 从而在「宽高同时受限」时仍严格保持比例，不会被拉变形。
+   */
+  Player.prototype._applyFit = function () {
+    var v = this.video;
+    var c = this.container;
+    if (!v || !c) return;
+    var w = v.videoWidth || 0;
+    var h = v.videoHeight || 0;
+    // 无尺寸信息、或处于全屏（需铺满屏幕）时不施加比例约束
+    if (!w || !h || this._webFullscreen || document.fullscreenElement) return;
+
+    var vh = Number((MM.config.PLAYER || {}).MAX_HEIGHT_VH) || 76;
+    c.style.aspectRatio = w + ' / ' + h;
+    c.style.maxHeight = vh + 'vh';
+    c.style.maxWidth = 'calc(' + vh + 'vh * ' + (w / h).toFixed(6) + ')';
+    // 容器比所在列窄时（竖屏视频）水平居中
+    c.style.marginLeft = 'auto';
+    c.style.marginRight = 'auto';
+  };
+
+  /** 清除 ``_applyFit`` 施加的内联比例约束（进入全屏 / 网页全屏时调用）。 */
+  Player.prototype._clearFit = function () {
+    var c = this.container;
+    if (!c) return;
+    c.style.aspectRatio = '';
+    c.style.maxHeight = '';
+    c.style.maxWidth = '';
+    c.style.marginLeft = '';
+    c.style.marginRight = '';
+  };
+
   Player.prototype.toggleWebFullscreen = function () {
     this._webFullscreen = !this._webFullscreen;
     var c = this.container;
     if (this._webFullscreen) {
       c.dataset.prevStyle = c.getAttribute('style') || '';
+      // 先清掉比例约束，否则 max-width 会把全屏画面卡成窄条
+      this._clearFit();
       c.style.cssText +=
         ';position:fixed;left:0;top:0;right:0;bottom:0;width:100vw;height:100vh;z-index:9999;border-radius:0;';
       document.body.style.overflow = 'hidden';
@@ -818,6 +862,7 @@
         this._placeholder.parentNode.insertBefore(c, this._placeholder);
         this._placeholder.parentNode.removeChild(this._placeholder);
       }
+      this._applyFit();
     }
     this._showControls(true);
   };

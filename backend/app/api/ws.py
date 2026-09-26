@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -27,6 +28,17 @@ router = APIRouter()
 # 推送间隔（秒），与 upload.progress_interval_ms 保持一致的下限
 _MIN_INTERVAL = 0.2
 _MAX_INTERVAL = 2.0
+
+
+def _dumps(obj: Any) -> str:
+    """序列化推送帧。
+
+    进度快照里的 ``created_at`` / ``updated_at`` 是数据库返回的 ``datetime``，
+    直接 ``json.dumps`` 会抛 ``TypeError: Object of type datetime is not JSON
+    serializable``，导致 **WebSocket 刚建立就以 1011 断开**（前端静默退化为轮询）。
+    这里统一用 ``default=str`` 兜底，任何非原生类型都不会再打断推送。
+    """
+    return json.dumps(obj, ensure_ascii=False, default=str)
 
 
 @router.websocket("/ws/admin/upload/{upload_id}")
@@ -50,12 +62,11 @@ async def upload_progress_ws(websocket: WebSocket, upload_id: str) -> None:
             snapshot = upload_service.snapshot(upload_id)
             if snapshot is None:
                 await websocket.send_text(
-                    json.dumps({"code": 4005, "msg": "上传会话不存在或已过期", "data": None},
-                               ensure_ascii=False)
+                    _dumps({"code": 4005, "msg": "上传会话不存在或已过期", "data": None})
                 )
                 break
 
-            payload = json.dumps({"code": 0, "msg": "ok", "data": snapshot}, ensure_ascii=False)
+            payload = _dumps({"code": 0, "msg": "ok", "data": snapshot})
             if payload != last_payload:
                 await websocket.send_text(payload)
                 last_payload = payload

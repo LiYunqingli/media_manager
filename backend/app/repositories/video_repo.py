@@ -351,7 +351,24 @@ def create(
     )
 
 
-_ALLOWED = {"title", "description", "category_id", "cover", "cover_source", "sort", "status"}
+# 允许被 UPDATE 的字段。
+# 前半段是管理员可编辑字段，后半段是系统探测/统计写入的字段
+# （refresh_meta 会回写 duration/width/height/bitrate/size，
+#   漏掉它们会导致「重新探测分辨率」静默不生效）。
+_ALLOWED = {
+    "title",
+    "description",
+    "category_id",
+    "cover",
+    "cover_source",
+    "sort",
+    "status",
+    "duration",
+    "width",
+    "height",
+    "bitrate",
+    "size",
+}
 
 
 def update(video_id: int, fields: dict[str, Any]) -> int:

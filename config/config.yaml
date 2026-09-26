@@ -109,6 +109,10 @@ media:
   cover_quality: 3
   # 探测超时（秒）
   probe_timeout: 30
+  # 合并后发现「真实容器与扩展名不符」时自动转封装（stream copy，不重编码、秒级完成）
+  # 例：上传的 .mp4 实际是 MPEG-TS，Windows 播放器会报「文件已损坏」。
+  # 置 false 则只在日志与提示里说明，不改动文件。
+  auto_remux: true
   # 本机 ffmpeg 可执行文件路径（仅当 backend=ffmpeg 时使用，默认关闭）
   ffmpeg_path: "ffmpeg"
 

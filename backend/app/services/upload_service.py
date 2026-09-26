@@ -28,6 +28,7 @@ finished      100        全部完成
 """
 from __future__ import annotations
 
+import contextlib
 import threading
 import time
 import uuid
@@ -330,6 +331,47 @@ def _merge_worker(upload_id: str, payload: dict[str, Any]) -> None:
         tmp_target.replace(merged_path)
         logger.info("合并完成 %s -> %s (%s)", upload_id, merged_path.name, file_utils.human_size(actual_size))
 
+        # ---------------- 容器校验 / 自动转封装 ----------------
+        # 扩展名不可信：把 .ts / .flv / .mkv 改名成 .mp4 的上游文件很常见。这类文件
+        # 字节完整、FFmpeg 也能解码，但系统播放器按扩展名解析会报「文件已损坏」，
+        # 容易被误判成上传/合并出错。合并是**按字节原样拼接**、不做转封装，所以这里
+        # 检测到不匹配就**自动转封装**（stream copy，无损、秒级），失败才退回提示。
+        container_note = ""
+        actual_container = media_service.detect_container(merged_path)
+        allowed = media_service.CONTAINERS_BY_EXT.get(target.suffix.lower())
+        if actual_container != "unknown" and allowed and actual_container not in allowed:
+            logger.warning(
+                "容器与扩展名不符 %s: 实际=%s 扩展名=%s",
+                merged_path.name, actual_container, target.suffix,
+            )
+            remuxed = False
+            if bool(settings.get("media.auto_remux", True)):
+                upload_repo.update(
+                    upload_id,
+                    {
+                        "stage": "merging",
+                        "percent": _stage_percent("merging", 1.0),
+                        "message": f"检测到 {actual_container.upper()} 容器，正在转封装为 {target.suffix}…",
+                    },
+                )
+                remuxed = _remux_in_place(merged_path, target.suffix)
+
+            if remuxed:
+                actual_size = file_utils.file_size(merged_path)
+                container_note = (
+                    f"原文件实为 {actual_container.upper()} 容器，已自动转封装为 {target.suffix.upper()}"
+                )
+                logger.info(
+                    "已自动转封装 %s: %s -> %s (%s)",
+                    merged_path.name, actual_container, target.suffix,
+                    file_utils.human_size(actual_size),
+                )
+            else:
+                container_note = (
+                    f"文件实际是 {actual_container.upper()} 容器，与扩展名 {target.suffix} 不符，"
+                    "系统播放器可能提示文件损坏（建议用 VLC/PotPlayer 打开，或转封装为 MP4）"
+                )
+
         # ---------------- 探测元信息 ----------------
         upload_repo.update(
             upload_id,
@@ -391,7 +433,8 @@ def _merge_worker(upload_id: str, payload: dict[str, Any]) -> None:
                 "video_id": video_id,
                 "merged_bytes": actual_size,
                 "speed": 0,
-                "message": f"完成，耗时 {time.time() - started:.1f}s",
+                "message": f"完成，耗时 {time.time() - started:.1f}s"
+                + (f"｜注意：{container_note}" if container_note else ""),
             },
         )
 
@@ -412,6 +455,34 @@ def _merge_worker(upload_id: str, payload: dict[str, Any]) -> None:
         with _RUNNING_LOCK:
             _RUNNING.discard(upload_id)
         _SPEED_CACHE.pop(upload_id, None)
+
+
+def _remux_in_place(path: Path, ext: str) -> bool:
+    """把 ``path`` 就地转封装为 ``ext`` 对应的容器。
+
+    先写到 ``storage/tmp`` 下的临时文件，校验容器正确后才原子替换原文件；
+    任何一步失败都保持原文件不变（宁可留一个容器不符的文件，也不能把内容搞丢）。
+    """
+    settings = get_settings()
+    tmp_dir = settings.storage_dir("tmp_dir")
+    file_utils.ensure_dir(tmp_dir)
+    tmp_out = tmp_dir / f"{path.stem}.remux{ext}"
+
+    ok, detail = media_service.remux_to_container(path, ext, out_path=tmp_out)
+    if not ok:
+        logger.warning("转封装失败，保留原文件 %s: %s", path.name, detail)
+        with contextlib.suppress(OSError):
+            tmp_out.unlink()
+        return False
+
+    try:
+        tmp_out.replace(path)
+    except OSError as exc:
+        logger.warning("转封装结果落盘失败 %s: %s", path.name, exc)
+        with contextlib.suppress(OSError):
+            tmp_out.unlink()
+        return False
+    return True
 
 
 def cancel_upload(user: dict[str, Any], upload_id: str) -> None:

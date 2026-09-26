@@ -1001,11 +1001,27 @@ button {
 .el-table {
   --el-table-border-color: var(--border);
   --el-table-header-bg-color: var(--panel-2);
-  --el-table-bg-color: transparent;
-  --el-table-tr-bg-color: transparent;
+  /* 必须是实色：Element Plus 的固定列用 background:inherit 继承 <tr> 背景，
+     <tr> 的背景来自 --el-table-tr-bg-color。若此处为 transparent，
+     横向滚动时固定列（操作列）会透出下层内容，显得错乱。 */
+  --el-table-bg-color: var(--panel);
+  --el-table-tr-bg-color: var(--panel);
   --el-table-row-hover-bg-color: var(--panel-hover);
   --el-table-text-color: var(--text);
   --el-table-header-text-color: var(--text-2);
+}
+/* 说明：固定列的「斑马纹 / 悬停」态无需额外处理——
+   Element Plus 自带的
+     .el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell
+     .el-table--enable-row-hover .el-table__body tr:hover > td.el-table__cell
+   选择器（4 个 class）同样命中固定列（固定列带 el-table__cell 类），
+   已经给出实底。会出问题的只有「普通行」的 background:inherit，
+   已由上面的 --el-table-tr-bg-color 修掉。 */
+
+/* 固定列与滚动区之间的分隔线，明确边界 */
+.el-table__body tr > td.el-table-fixed-column--right,
+.el-table__header-wrapper tr > th.el-table-fixed-column--right {
+  border-left: 1px solid var(--border);
 }
 .el-dialog,
 .el-drawer {

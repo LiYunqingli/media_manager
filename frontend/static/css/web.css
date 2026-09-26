@@ -541,16 +541,15 @@
   width: 100%;
   height: 100%;
   display: block;
+  /* contain 保证画面永不被拉伸（超宽/竖屏视频只做加黑边处理） */
   object-fit: contain;
   background: #000;
 }
-.mp--fullscreen video,
-.theater-main .mp video {
-  max-height: 100%;
-}
-.theater-main .mp video {
-  max-height: 76vh;
-}
+/* 容器的宽高比由 player.js 的 Player#_applyFit() 在 loadedmetadata 时按视频
+   真实比例动态设置，超过 MAX_HEIGHT_VH 时反推宽度收窄，并水平居中；
+   进入全屏 / 网页全屏时会临时清空这些约束以铺满屏幕。
+   注意：`.mp` 就是播放器容器本身（与 `.theater-main` / `.player-wrap` 同一个
+   元素），所以 `.theater-main .mp video` 这类后代选择器永远命中不到，勿再使用。 */
 
 /* 层级：画面 < 手势层 < 大播放键 < 提示 < 控制栏 */
 .mp__dim {
@@ -971,9 +970,6 @@
     border-radius: 0;
     border-left: none;
     border-right: none;
-  }
-  .theater-main .mp video {
-    max-height: none;
   }
   .shortcut-tip {
     display: none;

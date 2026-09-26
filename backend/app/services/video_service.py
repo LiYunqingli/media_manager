@@ -137,16 +137,18 @@ def refresh_meta(video_id: int) -> dict[str, Any]:
     if not source.exists():
         raise BizError(ErrorCode.FILE_NOT_FOUND)
     info = media_service.probe(source)
-    video_repo.update(
-        video_id,
-        {
-            "duration": float(info.get("duration") or 0),
-            "width": int(info.get("width") or 0),
-            "height": int(info.get("height") or 0),
-            "bitrate": int(info.get("bitrate") or 0),
-            "size": file_utils.file_size(source),
-        },
-    )
+    # probe() 探测失败时返回全 0 结构。若不加判断直接回写，
+    # 会把库里已有的分辨率/时长抹成 0，所以只更新探测有效的字段。
+    fields: dict[str, Any] = {"size": file_utils.file_size(source)}
+    if float(info.get("duration") or 0) > 0:
+        fields["duration"] = float(info["duration"])
+    if int(info.get("width") or 0) > 0:
+        fields["width"] = int(info["width"])
+    if int(info.get("height") or 0) > 0:
+        fields["height"] = int(info["height"])
+    if int(info.get("bitrate") or 0) > 0:
+        fields["bitrate"] = int(info["bitrate"])
+    video_repo.update(video_id, fields)
     return admin_detail(video_id)
 
 

@@ -218,4 +218,30 @@
   };
 
   MM.ui = ui;
+
+  /* -------------------------------------------------------- Vant 能力封装
+     放在 ui.js（两端共用）而不是 layout-web.js：
+     管理端页面不加载 layout-web.js，若定义在那里，管理端调用
+     MM.vant.toast(...) 会抛 "Cannot read properties of undefined (reading 'toast')"，
+     并且异常发生在 .then() 里会被后续 .catch() 捕获 → 表现为"操作成功却弹报错、
+     且后续刷新逻辑被跳过"。
+     用户端有 Vant 时走 Vant，管理端没有 Vant 时自动回退到自研 toast（common.css 已定义样式）。 */
+  MM.vant = {
+    /** 轻提示：优先用 Vant，缺失时回退到自研 toast */
+    toast: function (message, type) {
+      var v = global.vant;
+      if (v && v.showToast) {
+        v.showToast({ message: message, type: type || 'text', duration: 2000 });
+      } else {
+        ui.toast(message, type === 'fail' ? 'error' : type === 'success' ? 'success' : 'info');
+      }
+    },
+    confirm: function (message, title) {
+      var v = global.vant;
+      if (v && v.showConfirmDialog) {
+        return v.showConfirmDialog({ title: title || '提示', message: message });
+      }
+      return title ? ui.confirm(message, { title: title }) : ui.confirm(message);
+    }
+  };
 })(window);
