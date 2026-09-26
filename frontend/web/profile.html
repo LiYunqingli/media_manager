@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>个人中心 - MediaManager</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('mm_theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        var h = document.documentElement;
+        h.setAttribute('data-theme', t);
+        h.classList.toggle('dark', t === 'dark');
+        h.classList.toggle('van-theme-dark', t === 'dark');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/vendor/vant.css" />
+  <link rel="stylesheet" href="/static/css/common.css" />
+  <link rel="stylesheet" href="/static/css/web.css" />
+</head>
+<body>
+  <div id="app" v-cloak>
+    <web-shell :user="user" active="profile">
+      <div style="max-width:760px">
+
+        <!-- 资料卡 -->
+        <div class="mm-card">
+          <div class="mm-card__body mm-row" style="gap:18px;align-items:center">
+            <div class="web-avatar" style="width:64px;height:64px;font-size:24px">
+              <img v-if="profile.avatar_url" :src="profile.avatar_url" />
+              <span v-else>{{ initial }}</span>
+            </div>
+            <div class="mm-grow">
+              <div style="font-size:18px;font-weight:600">{{ profile.nickname || profile.username }}</div>
+              <div class="mm-row mm-wrap mm-mt-8" style="gap:10px;font-size:12.5px;color:var(--text-3)">
+                <span class="mm-tag">@{{ profile.username }}</span>
+                <span class="mm-tag mm-tag--muted">{{ profile.role === 'admin' ? '管理员' : '普通用户' }}</span>
+                <span class="mm-tag" :class="profile.status ? 'mm-tag--success' : 'mm-tag--danger'">
+                  {{ profile.status ? '账号正常' : '已禁用' }}
+                </span>
+              </div>
+              <div style="font-size:12px;color:var(--text-3);margin-top:6px">
+                上次登录：{{ realTime(profile.last_login_at) || '首次登录' }}
+                <span v-if="profile.last_login_ip"> · IP {{ profile.last_login_ip }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 统计 -->
+        <div class="stat-grid" style="margin-top:16px">
+          <div class="stat-card">
+            <div class="stat-card__label">⭐ 收藏视频</div>
+            <div class="stat-card__value">{{ stats.favorite_count || 0 }}<span class="stat-card__unit">个</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__label">🕘 观看记录</div>
+            <div class="stat-card__value">{{ stats.history_count || 0 }}<span class="stat-card__unit">条</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__label">⏱ 累计观看</div>
+            <div class="stat-card__value" style="font-size:22px">{{ watchText }}</div>
+          </div>
+        </div>
+
+        <!-- 修改资料 -->
+        <div class="mm-card mm-mt-16">
+          <div class="mm-card__head"><span class="mm-card__title">修改资料</span></div>
+          <div class="mm-card__body mm-col" style="gap:14px">
+            <div class="mm-field">
+              <label class="mm-field__label">昵称</label>
+              <input class="mm-input" v-model.trim="form.nickname" placeholder="请输入昵称" />
+            </div>
+            <div class="mm-field">
+              <label class="mm-field__label">邮箱</label>
+              <input class="mm-input" v-model.trim="form.email" placeholder="选填" />
+            </div>
+            <div class="mm-field">
+              <label class="mm-field__label">手机号</label>
+              <input class="mm-input" v-model.trim="form.phone" placeholder="选填" />
+            </div>
+            <div class="mm-row">
+              <button class="mm-btn mm-btn--primary" :disabled="saving" @click="saveProfile">
+                {{ saving ? '保存中…' : '保存资料' }}
+              </button>
+              <button class="mm-btn" @click="resetForm">重置</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 修改密码 -->
+        <div class="mm-card mm-mt-16">
+          <div class="mm-card__head"><span class="mm-card__title">修改密码</span></div>
+          <div class="mm-card__body mm-col" style="gap:14px">
+            <div class="mm-field">
+              <label class="mm-field__label">原密码</label>
+              <input class="mm-input" type="password" v-model="pwd.old_password" autocomplete="current-password" />
+            </div>
+            <div class="mm-field">
+              <label class="mm-field__label">新密码（至少 6 位）</label>
+              <input class="mm-input" type="password" v-model="pwd.new_password" autocomplete="new-password" />
+            </div>
+            <div class="mm-field">
+              <label class="mm-field__label">确认新密码</label>
+              <input class="mm-input" type="password" v-model="pwd.confirm" autocomplete="new-password" />
+            </div>
+            <div class="mm-row">
+              <button class="mm-btn mm-btn--primary" :disabled="changing" @click="changePassword">
+                {{ changing ? '提交中…' : '修改密码' }}
+              </button>
+            </div>
+            <div class="mm-field__hint">修改成功后需要重新登录。</div>
+          </div>
+        </div>
+
+        <!-- 可见范围 -->
+        <div class="mm-card mm-mt-16">
+          <div class="mm-card__head"><span class="mm-card__title">我的可见分类</span></div>
+          <div class="mm-card__body">
+            <div class="mm-row mm-wrap" style="gap:8px">
+              <span class="mm-tag" v-for="c in categories" :key="c.id">{{ c.name }}</span>
+              <span v-if="!categories.length" class="mm-muted">暂无可访问的分类，请联系管理员开通</span>
+            </div>
+            <div class="mm-field__hint mm-mt-8">
+              该范围由管理员配置；若某个分类下的单个视频被单独限制，该视频不会出现在列表中。
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </web-shell>
+  </div>
+
+  <script src="/static/vendor/vue.global.prod.js"></script>
+  <script src="/static/vendor/vant.min.js"></script>
+  <script src="/static/js/config.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/ui.js"></script>
+  <script src="/static/js/request.js"></script>
+  <script src="/static/js/components-web.js"></script>
+  <script src="/static/js/layout-web.js"></script>
+  <script>
+    (function () {
+      var util = MM.util;
+
+      MM.bootWeb({
+        data: function () {
+          return {
+            user: MM.auth.getUser() || {},
+            profile: {},
+            stats: {},
+            categories: [],
+            form: { nickname: '', email: '', phone: '' },
+            pwd: { old_password: '', new_password: '', confirm: '' },
+            saving: false,
+            changing: false
+          };
+        },
+        computed: {
+          initial: function () {
+            var n = this.profile.nickname || this.profile.username || 'U';
+            return n.slice(0, 1).toUpperCase();
+          },
+          watchText: function () {
+            var s = Math.round(Number(this.stats.watch_seconds) || 0);
+            if (s < 60) return s + ' 秒';
+            return util.formatDurationCn(s);
+          }
+        },
+        mounted: function () {
+          this.load();
+          this.loadCategories();
+        },
+        methods: {
+          load: function () {
+            var self = this;
+            MM.http
+              .get('/client/profile')
+              .then(function (data) {
+                self.profile = data;
+                self.stats = data.stats || {};
+                MM.auth.setUser(data);
+                self.resetForm();
+              })
+              .catch(function (err) {
+                MM.http.toastError(err);
+              });
+          },
+          loadCategories: function () {
+            var self = this;
+            MM.http
+              .get('/client/categories')
+              .then(function (list) {
+                self.categories = list || [];
+              })
+              .catch(function () {});
+          },
+          resetForm: function () {
+            this.form = {
+              nickname: this.profile.nickname || '',
+              email: this.profile.email || '',
+              phone: this.profile.phone || ''
+            };
+          },
+          saveProfile: function () {
+            var self = this;
+            self.saving = true;
+            MM.http
+              .put('/client/profile', self.form)
+              .then(function (data) {
+                self.profile = data;
+                MM.auth.setUser(data);
+                self.user = data;
+                MM.vant.toast('资料已更新', 'success');
+                self.saving = false;
+              })
+              .catch(function (err) {
+                self.saving = false;
+                MM.http.toastError(err);
+              });
+          },
+          changePassword: function () {
+            var self = this;
+            if (!self.pwd.old_password || !self.pwd.new_password) {
+              MM.vant.toast('请填写完整');
+              return;
+            }
+            if (self.pwd.new_password !== self.pwd.confirm) {
+              MM.vant.toast('两次输入的新密码不一致');
+              return;
+            }
+            if (self.pwd.new_password.length < 6) {
+              MM.vant.toast('新密码至少 6 位');
+              return;
+            }
+            self.changing = true;
+            MM.http
+              .put('/client/profile/password', {
+                old_password: self.pwd.old_password,
+                new_password: self.pwd.new_password
+              })
+              .then(function () {
+                MM.vant.toast('密码已修改，请重新登录', 'success');
+                MM.auth.clear();
+                setTimeout(function () {
+                  util.go(MM.config.PATHS.webLogin);
+                }, 1200);
+              })
+              .catch(function (err) {
+                self.changing = false;
+                MM.http.toastError(err);
+              });
+          },
+          realTime: function (t) {
+            return util.formatDate(t, true);
+          }
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

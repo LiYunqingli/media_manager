@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>视频详情 - MediaManager</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('mm_theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        var h = document.documentElement;
+        h.setAttribute('data-theme', t);
+        h.classList.toggle('dark', t === 'dark');
+        h.classList.toggle('van-theme-dark', t === 'dark');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/vendor/vant.css" />
+  <link rel="stylesheet" href="/static/css/common.css" />
+  <link rel="stylesheet" href="/static/css/web.css" />
+</head>
+<body>
+  <div id="app" v-cloak>
+    <web-shell :user="user" :active="video ? 'cat-' + video.category_id : ''">
+
+      <!-- 加载中 -->
+      <div v-if="loading" class="mm-col" style="gap:18px">
+        <div class="mm-skeleton" style="width:100%;aspect-ratio:16/9;border-radius:10px"></div>
+        <div class="mm-skeleton" style="height:22px;width:52%"></div>
+        <div class="mm-skeleton" style="height:14px;width:34%"></div>
+      </div>
+
+      <mm-empty v-else-if="error" icon="⚠️" :text="error">
+        <button class="mm-btn mm-btn--primary mm-mt-16" @click="backHome">返回首页</button>
+      </mm-empty>
+
+      <template v-else>
+        <div class="detail-layout">
+
+          <!-- ======================= 左侧主区 ======================= -->
+          <div class="detail-main">
+            <!-- 播放器 -->
+            <div class="player-wrap" id="player-host"></div>
+
+            <h1 class="detail-title">{{ video.title }}</h1>
+
+            <div class="detail-meta">
+              <span class="mm-tag">{{ video.category_name || '未分类' }}</span>
+              <span>👁 {{ count(viewCount) }} 次播放</span>
+              <span>⏱ {{ video.duration_text }}</span>
+              <span v-if="video.size_text">📦 {{ video.size_text }}</span>
+              <span v-if="video.width">🖥 {{ video.width }}×{{ video.height }}</span>
+              <span>🕒 {{ fromNow(video.created_at) }}</span>
+
+              <div class="detail-actions">
+                <button class="mm-btn" :class="{ 'mm-btn--primary': favorited }" @click="toggleFavorite">
+                  {{ favorited ? '★ 已收藏' : '☆ 收藏' }}
+                </button>
+                <button class="mm-btn" @click="theaterMode">⛶ 影院模式</button>
+                <button class="mm-btn" @click="copyLink">🔗 复制链接</button>
+              </div>
+            </div>
+
+            <!-- 进度提示条 -->
+            <div v-if="resumeTip" class="mm-tag" style="margin-top:12px;height:auto;padding:8px 12px;display:block">
+              {{ resumeTip }}
+            </div>
+
+            <!-- 简介 -->
+            <div class="detail-desc" :style="!descExpanded ? 'max-height:96px;overflow:hidden' : ''">
+              {{ video.description || '暂无简介' }}
+            </div>
+            <button v-if="(video.description || '').length > 120" class="mm-btn mm-btn--sm"
+                    @click="descExpanded = !descExpanded">
+              {{ descExpanded ? '收起' : '展开全部' }}
+            </button>
+
+            <!-- ================== 相关推荐（同分类优先） ================== -->
+            <section class="mm-section" style="margin-top:26px" v-if="video.related && video.related.length">
+              <div class="mm-section__head">
+                <h2 class="mm-section__title">相关推荐 · {{ video.category_name }}</h2>
+                <span class="mm-section__more" @click="goCategory(video.category_id)">更多同类 →</span>
+              </div>
+              <div class="mm-grid">
+                <v-card v-for="v in video.related" :key="'r' + v.id" :video="v"></v-card>
+              </div>
+            </section>
+          </div>
+
+          <!-- ======================= 右侧推荐栏 ======================= -->
+          <aside class="related-panel">
+            <div class="mm-card">
+              <div class="mm-card__head">
+                <span class="mm-card__title">📺 同分类热门</span>
+                <span class="mm-section__more" @click="goCategory(video.category_id)">全部 →</span>
+              </div>
+              <div class="mm-card__body" style="padding:8px">
+                <div class="related-list">
+                  <v-item v-for="(v, i) in related" :key="'side' + v.id"
+                          :video="v" :index="i + 1"></v-item>
+                </div>
+                <mm-empty v-if="!related.length" text="暂无相关视频"></mm-empty>
+              </div>
+            </div>
+
+            <!-- 继续观看 -->
+            <div class="mm-card mm-mt-16" v-if="continueWatch.length">
+              <div class="mm-card__head">
+                <span class="mm-card__title">⏳ 继续观看</span>
+              </div>
+              <div class="mm-card__body" style="padding:8px">
+                <v-item v-for="h in continueWatch" :key="'cw' + h.video_id"
+                        :video="h" :desc="'看到 ' + h.last_position_text"></v-item>
+              </div>
+            </div>
+          </aside>
+
+        </div>
+      </template>
+
+    </web-shell>
+  </div>
+
+  <script src="/static/vendor/vue.global.prod.js"></script>
+  <script src="/static/vendor/vant.min.js"></script>
+  <script src="/static/js/config.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/ui.js"></script>
+  <script src="/static/js/request.js"></script>
+  <script src="/static/js/components-web.js"></script>
+  <script src="/static/js/layout-web.js"></script>
+  <script src="/static/js/player.js"></script>
+  <script>
+    (function () {
+      var util = MM.util;
+
+      function uuid() {
+        if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID().replace(/-/g, '');
+        return 'seg' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+      }
+
+      MM.bootWeb({
+        data: function () {
+          return {
+            user: MM.auth.getUser() || {},
+            videoId: Number(util.query('id', 0)),
+            video: null,
+            related: [],
+            continueWatch: [],
+            loading: true,
+            error: '',
+            favorited: false,
+            viewCount: 0,
+            resumeTip: '',
+            descExpanded: false,
+            player: null,
+            segmentId: uuid(),
+            reportDisabled: false
+          };
+        },
+        mounted: function () {
+          if (!this.videoId) {
+            this.error = '缺少视频参数';
+            this.loading = false;
+            return;
+          }
+          this.load();
+          this.loadSide();
+        },
+        beforeUnmount: function () {
+          if (this.player) this.player.destroy();
+        },
+        methods: {
+          load: function () {
+            var self = this;
+            self.loading = true;
+            MM.http
+              .get('/client/videos/' + self.videoId)
+              .then(function (data) {
+                self.video = data;
+                self.favorited = !!data.favorited;
+                self.viewCount = data.view_count;
+                self.related = data.related || [];
+                self.loading = false;
+                document.title = data.title + ' - MediaManager';
+                self.$nextTick(function () {
+                  self.initPlayer(data);
+                });
+              })
+              .catch(function (err) {
+                self.loading = false;
+                self.error =
+                  Number(err.code) === 3003 || Number(err.code) === 4004
+                    ? '该视频不存在，或你没有观看权限'
+                    : (err && err.message) || '加载失败';
+              });
+          },
+          loadSide: function () {
+            var self = this;
+            // 侧栏「继续观看」：从历史列表取最近几条（排除当前视频）
+            MM.http
+              .get('/client/history', { page: 1, page_size: 6 })
+              .then(function (data) {
+                self.continueWatch = (data.list || []).filter(function (h) {
+                  return Number(h.video_id) !== self.videoId;
+                });
+              })
+              .catch(function () {
+                /* 侧栏失败不影响主流程 */
+              });
+          },
+          initPlayer: function (data) {
+            var self = this;
+            if (!self.player) {
+              self.player = new MM.Player(document.getElementById('player-host'), {
+                src: data.play_url,
+                poster: data.cover_url,
+                title: data.title,
+                autoplay: true,
+                lastPosition: data.history ? data.history.last_position : 0,
+                onReport: function (payload) {
+                  self.report(payload);
+                },
+                onEnded: function () {
+                  MM.vant.toast('播放结束');
+                  self.loadSide();
+                }
+              });
+              if (data.history && data.history.last_position > MM.config.PLAY_REPORT.RESUME_MIN) {
+                self.resumeTip =
+                  '已定位到上次观看位置 ' +
+                  util.formatDuration(data.history.last_position) +
+                  '，进度 ' +
+                  data.history.progress +
+                  '%';
+              }
+            }
+          },
+          report: function (payload) {
+            var self = this;
+            if (self.reportDisabled) return;
+            MM.http
+              .post('/client/videos/' + self.videoId + '/play-report', {
+                segment_id: self.segmentId,
+                position: payload.position,
+                duration: payload.duration,
+                delta: payload.delta
+              })
+              .then(function (res) {
+                self.viewCount = res.view_count;
+              })
+              .catch(function (err) {
+                // 权限被回收或视频下架时停止继续上报，避免刷屏
+                if ([3003, 4004, 3002].indexOf(Number(err.code)) >= 0) {
+                  self.reportDisabled = true;
+                }
+              });
+          },
+          toggleFavorite: function () {
+            var self = this;
+            MM.http
+              .post('/client/favorites/' + self.videoId + '/toggle')
+              .then(function (res) {
+                self.favorited = res.favorited;
+                if (self.video) self.video.favorite_count = res.favorite_count;
+                MM.vant.toast(res.favorited ? '已加入收藏' : '已取消收藏');
+              })
+              .catch(function (err) {
+                MM.http.toastError(err);
+              });
+          },
+          theaterMode: function () {
+            util.go(MM.config.PATHS.webPlay, { id: this.videoId });
+          },
+          copyLink: function () {
+            MM.ui.copy(window.location.href);
+          },
+          goCategory: function (id) {
+            util.go(MM.config.PATHS.webCategory, { id: id });
+          },
+          backHome: function () {
+            util.go(MM.config.PATHS.webHome);
+          },
+          count: function (n) {
+            return util.formatCount(n);
+          },
+          fromNow: function (t) {
+            return util.fromNow(t);
+          }
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

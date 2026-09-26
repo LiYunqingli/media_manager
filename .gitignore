@@ -216,3 +216,44 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ===========================================================================
+# MediaManager 项目专属
+# ===========================================================================
+
+# 运行时媒体文件、上传分片、头像、封面、日志（体积大，不入版本库）
+# 保留目录结构本身，通过 .gitkeep 占位
+storage/*
+!storage/.gitkeep
+!storage/videos/.gitkeep
+!storage/covers/.gitkeep
+!storage/avatars/.gitkeep
+!storage/chunks/.gitkeep
+!storage/tmp/.gitkeep
+!storage/logs/.gitkeep
+
+# 本地配置覆盖（config/config.yaml 作为模板入库，本地覆盖不入库）
+config/config.local.yaml
+config/config.local.yml
+config/config.*.local.yaml
+config/*.local.yaml
+
+# 下载的前端库可由 scripts/fetch_vendor.py 重新获取。
+# 默认入库以保证离线可用；若嫌体积大可取消下一行注释。
+# frontend/static/vendor/
+
+# WorkBuddy 工作目录（记忆、会话数据等本地工作状态，不入库）
+.workbuddy/
+
+# IDE / 编辑器
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# 数据库导出与本地备份
+sql/backup/
+*.sql.bak
+*.dump

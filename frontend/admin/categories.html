@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>分类管理 - MediaManager 管理端</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('mm_theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        var h = document.documentElement;
+        h.setAttribute('data-theme', t);
+        h.classList.toggle('dark', t === 'dark');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/vendor/element-plus.css" />
+  <link rel="stylesheet" href="/static/vendor/element-plus-dark.css" />
+  <link rel="stylesheet" href="/static/css/common.css" />
+  <link rel="stylesheet" href="/static/css/web.css" />
+  <link rel="stylesheet" href="/static/css/admin.css" />
+</head>
+<body>
+  <div id="app" v-cloak>
+    <admin-shell title="分类管理" crumb="内容 / 分类管理" active="categories">
+
+      <div class="toolbar">
+        <span class="toolbar__title">🗂 分类列表（{{ list.length }}）</span>
+        <div class="mm-row">
+          <el-button @click="load">刷新</el-button>
+          <el-button type="primary" @click="openCreate">新增分类</el-button>
+        </div>
+      </div>
+
+      <div class="mm-card" style="overflow:hidden">
+        <el-table :data="list" v-loading="loading" stripe row-key="id">
+          <el-table-column label="排序" width="130">
+            <template #default="{ row, $index }">
+              <div class="mm-row" style="gap:4px">
+                <el-button size="small" text :disabled="$index === 0" @click="move($index, -1)">↑</el-button>
+                <el-button size="small" text :disabled="$index === list.length - 1" @click="move($index, 1)">↓</el-button>
+                <span class="mm-mono mm-muted" style="font-size:12px">{{ row.sort }}</span>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="封面" width="132">
+            <template #default="{ row }">
+              <div class="file-thumb">
+                <img v-if="row.cover_url" :src="row.cover_url" />
+                <div v-else class="v-card__placeholder" :style="{ background: grad(row.name), fontSize: 14 }">
+                  {{ initials(row.name) }}
+                </div>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="名称" min-width="150">
+            <template #default="{ row }">
+              <div style="font-weight:500">{{ row.name }}</div>
+              <div style="font-size:11.5px;color:var(--text-3)">#{{ row.id }}</div>
+            </template>
+          </el-table-column>
+          <el-table-column label="描述" min-width="200">
+            <template #default="{ row }">
+              <span class="mm-muted" style="font-size:12.5px">{{ row.description || '—' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="视频数" width="96">
+            <template #default="{ row }">
+              <span class="mm-tag" :class="row.video_count ? '' : 'mm-tag--muted'">{{ row.video_count }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="100">
+            <template #default="{ row }">
+              <el-switch :model-value="row.status === 1" @change="toggleStatus(row)"></el-switch>
+              <div style="font-size:11px;color:var(--text-3);margin-top:2px">
+                {{ row.status ? '启用' : '隐藏' }}
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="创建时间" width="150">
+            <template #default="{ row }">
+              <span class="mm-muted" style="font-size:12px">{{ dateText(row.created_at) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="200" fixed="right">
+            <template #default="{ row }">
+              <el-button size="small" @click="openEdit(row)">编辑</el-button>
+              <el-button size="small" @click="goVideos(row)">查看视频</el-button>
+              <el-button size="small" type="danger" plain @click="remove(row)">删除</el-button>
+            </template>
+          </el-table-column>
+          <template #empty>
+            <el-empty description="还没有分类，先创建一个吧">
+              <el-button type="primary" @click="openCreate">新增分类</el-button>
+            </el-empty>
+          </template>
+        </el-table>
+      </div>
+
+      <!-- 新增 / 编辑 -->
+      <el-dialog v-model="visible" :title="form.id ? '编辑分类' : '新增分类'" width="520px">
+        <div class="mm-col" style="gap:14px">
+          <div class="mm-field">
+            <label class="mm-field__label">分类名称 *</label>
+            <el-input v-model.trim="form.name" maxlength="64" show-word-limit placeholder="例如：电影 / 动漫"></el-input>
+          </div>
+          <div class="mm-field">
+            <label class="mm-field__label">描述</label>
+            <el-input v-model="form.description" type="textarea" :rows="3" maxlength="255" show-word-limit></el-input>
+          </div>
+          <div class="mm-field">
+            <label class="mm-field__label">封面</label>
+            <div style="display:grid;grid-template-columns:180px 1fr;gap:12px;align-items:start">
+              <div class="cover-preview">
+                <img v-if="form.cover_url" :src="form.cover_url" />
+                <div v-else class="cover-preview__empty">无封面</div>
+              </div>
+              <div class="mm-col" style="gap:8px">
+                <el-button size="small" @click="pickCover">上传封面</el-button>
+                <el-button size="small" v-if="form.cover_url" @click="form.cover_url = ''; form.cover = ''">清除封面</el-button>
+                <div class="mm-field__hint">也可以直接填写图片地址</div>
+                <el-input v-model.trim="form.cover" size="small" placeholder="/media/covers/xxx.jpg"></el-input>
+              </div>
+            </div>
+            <input ref="coverInput" type="file" accept="image/*" style="display:none" @change="onCoverPick" />
+          </div>
+          <div class="mm-row">
+            <div class="mm-field mm-grow">
+              <label class="mm-field__label">排序值（越小越靠前）</label>
+              <el-input-number v-model="form.sort" :min="-9999" :max="9999" style="width:100%"></el-input-number>
+            </div>
+            <div class="mm-field" style="padding-top:22px">
+              <el-checkbox v-model="form.status" :true-value="1" :false-value="0">启用（用户端可见）</el-checkbox>
+            </div>
+          </div>
+        </div>
+        <template #footer>
+          <el-button @click="visible = false">取消</el-button>
+          <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+        </template>
+      </el-dialog>
+
+    </admin-shell>
+  </div>
+
+  <script src="/static/vendor/vue.global.prod.js"></script>
+  <script src="/static/vendor/element-plus.min.js"></script>
+  <script src="/static/vendor/element-plus-zh-cn.min.js"></script>
+  <script src="/static/vendor/element-plus-icons.js"></script>
+  <script src="/static/js/config.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/ui.js"></script>
+  <script src="/static/js/request.js"></script>
+  <script src="/static/js/components-web.js"></script>
+  <script src="/static/js/admin-common.js"></script>
+  <script>
+    (function () {
+      var util = MM.util;
+
+      function emptyForm() {
+        return { id: 0, name: '', description: '', cover: '', cover_url: '', sort: 0, status: 1 };
+      }
+
+      MM.bootAdmin({
+        data: function () {
+          return {
+            loading: true,
+            saving: false,
+            list: [],
+            visible: false,
+            form: emptyForm()
+          };
+        },
+        mounted: function () {
+          this.load();
+        },
+        methods: {
+          load: function () {
+            var self = this;
+            self.loading = true;
+            MM.http
+              .get('/admin/categories')
+              .then(function (list) {
+                self.list = list || [];
+                self.loading = false;
+              })
+              .catch(function (err) {
+                self.loading = false;
+                MM.http.toastError(err);
+              });
+          },
+          openCreate: function () {
+            this.form = emptyForm();
+            var max = 0;
+            this.list.forEach(function (c) {
+              if (c.sort > max) max = c.sort;
+            });
+            this.form.sort = max + 10;
+            this.visible = true;
+          },
+          openEdit: function (row) {
+            this.form = {
+              id: row.id,
+              name: row.name,
+              description: row.description || '',
+              cover: row.cover || '',
+              cover_url: row.cover_url || '',
+              sort: row.sort,
+              status: row.status
+            };
+            this.visible = true;
+          },
+          save: function () {
+            var self = this;
+            if (!self.form.name) {
+              MM.ui.warning('分类名称不能为空');
+              return;
+            }
+            self.saving = true;
+            var payload = {
+              name: self.form.name,
+              description: self.form.description,
+              cover: self.form.cover,
+              sort: self.form.sort,
+              status: self.form.status
+            };
+            var req = self.form.id
+              ? MM.http.put('/admin/categories/' + self.form.id, payload)
+              : MM.http.post('/admin/categories', payload);
+            req
+              .then(function () {
+                MM.vant.toast('已保存', 'success');
+                self.saving = false;
+                self.visible = false;
+                self.load();
+              })
+              .catch(function (err) {
+                self.saving = false;
+                MM.http.toastError(err);
+              });
+          },
+          pickCover: function () {
+            this.$refs.coverInput.click();
+          },
+          onCoverPick: function (e) {
+            var self = this;
+            var file = (e.target.files || [])[0];
+            if (!file) return;
+            var fd = new FormData();
+            fd.append('file', file);
+            fd.append('kind', 'category');
+            MM.http
+              .upload('/admin/upload/image', fd)
+              .then(function (res) {
+                self.form.cover = res.path;
+                self.form.cover_url = res.url;
+                MM.vant.toast('封面已上传', 'success');
+              })
+              .catch(function (err) {
+                MM.http.toastError(err);
+              });
+            e.target.value = '';
+          },
+          toggleStatus: function (row) {
+            var self = this;
+            MM.http
+              .put('/admin/categories/' + row.id, { status: row.status ? 0 : 1 })
+              .then(function () {
+                MM.vant.toast(row.status ? '已隐藏' : '已启用');
+                self.load();
+              })
+              .catch(function (err) {
+                MM.http.toastError(err);
+              });
+          },
+          move: function (index, delta) {
+            var target = index + delta;
+            if (target < 0 || target >= this.list.length) return;
+            var arr = this.list.slice();
+            var tmp = arr[index];
+            arr[index] = arr[target];
+            arr[target] = tmp;
+            var self = this;
+            MM.http
+              .put('/admin/categories/sort/update', { ids: arr.map(function (c) { return c.id; }) })
+              .then(function (list) {
+                self.list = list || arr;
+              })
+              .catch(function (err) {
+                MM.http.toastError(err);
+              });
+          },
+          remove: function (row) {
+            var self = this;
+            var tip = row.video_count
+              ? '分类「' + row.name + '」下还有 ' + row.video_count + ' 个视频。\n' +
+                '选择「强制删除」会把这些视频全部下架（用户端不可见），是否继续？'
+              : '确定删除分类「' + row.name + '」吗？';
+            MM.ui
+              .confirm(tip, { danger: true, okText: row.video_count ? '强制删除' : '确定删除' })
+              .then(function (yes) {
+                if (!yes) return;
+                MM.http
+                  .del('/admin/categories/' + row.id, { force: row.video_count ? 'true' : 'false' })
+                  .then(function () {
+                    MM.vant.toast('已删除', 'success');
+                    self.load();
+                  })
+                  .catch(function (err) {
+                    MM.http.toastError(err);
+                  });
+              });
+          },
+          goVideos: function (row) {
+            window.location.href = '/admin/videos.html';
+          },
+          dateText: function (t) {
+            return util.formatDate(t, true);
+          },
+          grad: function (t) {
+            return util.coverGradient(t);
+          },
+          initials: function (t) {
+            return util.coverInitials(t);
+          }
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

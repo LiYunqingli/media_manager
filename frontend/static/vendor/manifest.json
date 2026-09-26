@@ -1,0 +1,69 @@
+{
+  "generated_at": "2026-09-26T11:52:36+08:00",
+  "assets": [
+    {
+      "name": "vue.global.prod.js",
+      "version": "3.4.38",
+      "package": "vue",
+      "source": "local",
+      "size": 146843,
+      "sha256": "b50eeefe35d41636bb96c92b40f1df0b4fb7914e07b3c625b1ec15e9748767b9"
+    },
+    {
+      "name": "element-plus.min.js",
+      "version": "2.7.8",
+      "package": "element-plus",
+      "source": "local",
+      "size": 961022,
+      "sha256": "3934e8d470c626de334ef8ad7f85bc2f59cecd1ae0f55a9265019633aeac6119"
+    },
+    {
+      "name": "element-plus.css",
+      "version": "2.7.8",
+      "package": "element-plus",
+      "source": "local",
+      "size": 321076,
+      "sha256": "cf520a57f546f4ba62f8126f08d02cc8854adbc3451e7baecfde3e488c642ab6"
+    },
+    {
+      "name": "element-plus-dark.css",
+      "version": "2.7.8",
+      "package": "element-plus",
+      "source": "local",
+      "size": 2919,
+      "sha256": "ff5ff4714fd3a8d08ac97f545a9173183bcc26add3b6420a1bb97a1cceffac06"
+    },
+    {
+      "name": "element-plus-zh-cn.min.js",
+      "version": "2.7.8",
+      "package": "element-plus",
+      "source": "local",
+      "size": 3441,
+      "sha256": "a63ae2272516a1c1a87fdff00977f59f9dca9fd9428a955f1bad2b75ae5f4310"
+    },
+    {
+      "name": "element-plus-icons.js",
+      "version": "2.3.1",
+      "package": "@element-plus/icons-vue",
+      "source": "local",
+      "size": 209913,
+      "sha256": "0b65b24e39ab2252aefde02a93870200ce992004ce0cec43df095e4720cc4405"
+    },
+    {
+      "name": "vant.min.js",
+      "version": "4.9.10",
+      "package": "vant",
+      "source": "local",
+      "size": 245371,
+      "sha256": "76ba942cc7615ea14904a17c55924996821ccdd73dba5cf0bb4ec644f61c4ad0"
+    },
+    {
+      "name": "vant.css",
+      "version": "4.9.10",
+      "package": "vant",
+      "source": "local",
+      "size": 199285,
+      "sha256": "eb849c68ed72e1da4f27f32a0742ab5aed6f7104ab383455ab882b9b372710d3"
+    }
+  ]
+}

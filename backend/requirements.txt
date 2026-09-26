@@ -1,0 +1,26 @@
+# =============================================================================
+#  MediaManager 后端依赖
+#  安装:  pip install -r backend/requirements.txt
+#  Python 版本要求: 3.10+（代码使用了 `X | None` 类型语法）
+# =============================================================================
+
+# ---- Web 框架 ----
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.27          # 含 websockets，WebSocket 进度推送需要
+python-multipart>=0.0.9          # 解析 multipart/form-data（分片上传必需）
+
+# ---- 数据库 ----
+PyMySQL>=1.1.0                   # 纯 Python MySQL 驱动，无需编译
+
+# ---- 配置 ----
+PyYAML>=6.0                      # 读取 config/config.yaml
+
+# ---- 数据校验（FastAPI 依赖，显式声明版本范围）----
+pydantic>=2.5,<3.0
+
+# ---- 媒体处理（任选其一即可，两者都装则抽帧优先用 OpenCV）----
+opencv-python-headless>=4.8.0    # 抽关键帧 + 元数据探测；headless 版无需 GUI 库
+# av>=12.0.0                     # PyAV：探测更准确，可作备选；如已装 ffmpeg 建议启用
+
+# ---- 可选增强 ----
+# Pillow>=10.0                   # 配合 PyAV 抽帧时使用（不装则走 PyAV 内置 MJPEG 编码）

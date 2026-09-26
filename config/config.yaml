@@ -1,0 +1,156 @@
+# =============================================================================
+#  MediaManager 视频管理系统 —— 主配置文件
+#  所有可变参数集中在此。程序启动时读取本文件（路径可用环境变量 MM_CONFIG 覆盖）。
+#  支持 ${ENV_VAR:default} 形式引用环境变量，便于部署时不落地明文密码。
+# =============================================================================
+
+app:
+  name: MediaManager
+  version: 1.0.0
+  # 监听地址；局域网调试用 0.0.0.0，本机调试可用 127.0.0.1
+  host: 0.0.0.0
+  port: 8000
+  # 访问根路径时自动跳转的默认站点：web(用户端) / admin(管理端) / none(返回API信息)
+  default_site: web
+  timezone: Asia/Shanghai
+  # 跨域白名单；["*"] 表示允许全部（前后端分离部署时按需收紧）
+  cors_origins:
+    - "*"
+
+# -----------------------------------------------------------------------------
+# 数据库
+# -----------------------------------------------------------------------------
+database:
+  host: lihuarong.local
+  port: 3306
+  user: root
+  password: "Aa123456"
+  name: media_manager
+  charset: utf8mb4
+  # 连接池
+  pool_min: 1
+  pool_max: 10
+  pool_wait_timeout: 10
+  # 单条 SQL 超时（秒）
+  connect_timeout: 10
+  read_timeout: 30
+  write_timeout: 30
+
+# -----------------------------------------------------------------------------
+# 认证与安全
+# -----------------------------------------------------------------------------
+security:
+  # 【务必修改】JWT 签名密钥
+  secret_key: "${MM_SECRET_KEY:media-manager-please-change-this-secret}"
+  jwt_algorithm: HS256
+  # 登录令牌有效期（分钟），默认 7 天
+  token_expire_minutes: 10080
+  # 是否允许同一账号多端同时在线（false 时以最新登录为准，旧 token 依然有效但会被标记）
+  allow_multi_login: true
+  # PBKDF2 迭代次数
+  password_rounds: 120000
+  # 登录失败锁定：连续失败次数上限（0 = 不锁定）
+  login_max_fail: 0
+  # 是否强制用户首次登录修改密码
+  force_change_password: false
+
+# -----------------------------------------------------------------------------
+# 存储
+# -----------------------------------------------------------------------------
+storage:
+  # 所有媒体文件的根目录（相对项目根目录，或写绝对路径）
+  root: "./storage"
+  video_dir: "videos" # 正式视频
+  cover_dir: "covers" # 封面
+  avatar_dir: "avatars" # 头像
+  chunk_dir: "chunks" # 分片临时目录
+  tmp_dir: "tmp" # 其他临时文件
+  log_dir: "logs"
+  # 允许上传的视频扩展名
+  allow_video_ext:
+    [".mp4", ".m4v", ".mov", ".mkv", ".webm", ".avi", ".flv", ".ts", ".wmv"]
+  # 允许上传的图片扩展名
+  allow_image_ext: [".jpg", ".jpeg", ".png", ".webp", ".bmp"]
+  # 单文件体积上限（字节）；0 = 不限制
+  max_file_size: 0
+
+# -----------------------------------------------------------------------------
+# 分片上传
+# -----------------------------------------------------------------------------
+upload:
+  # 单个分片大小（字节）。前端会读取此值进行切分，默认 5MB
+  chunk_size: 5242880
+  # 未完成的上传会话保留时长（小时），超时可被清理任务回收
+  session_expire_hours: 24
+  # 合并时是否先校验分片数量
+  verify_chunks: true
+  # 合并后是否删除分片
+  remove_chunks_after_merge: true
+  # 允许的最大分片数，防滥用
+  max_chunks: 20000
+  # 合并进度推送间隔（毫秒）
+  progress_interval_ms: 300
+
+# -----------------------------------------------------------------------------
+# 媒体处理（关键帧抽取 / 元数据探测）
+# -----------------------------------------------------------------------------
+media:
+  # 优先级顺序：av(PyAV) -> cv2(OpenCV) -> builtin(纯Python MP4解析，仅时长)
+  # 可强制指定：auto | av | cv2 | builtin
+  backend: auto
+  # 抽帧时间点（秒），从该时刻起寻找最近的关键帧
+  cover_seek_seconds: 3.0
+  # 若在 seek 点抽帧失败，回退到这些时间点重试
+  cover_fallback_seeks: [1.0, 0.0]
+  # 封面最长边像素
+  cover_max_width: 1280
+  cover_max_height: 720
+  # JPEG 质量 1-31，数字越小质量越高
+  cover_quality: 3
+  # 探测超时（秒）
+  probe_timeout: 30
+  # 本机 ffmpeg 可执行文件路径（仅当 backend=ffmpeg 时使用，默认关闭）
+  ffmpeg_path: "ffmpeg"
+
+# -----------------------------------------------------------------------------
+# 业务规则
+# -----------------------------------------------------------------------------
+business:
+  # 播放次数统计：单次播放会话累计观看达到该秒数才计 1 次
+  view_count_threshold_seconds: 10
+  # 前端上报观看进度的心跳间隔（秒）
+  heartbeat_interval_seconds: 5
+  # 进度达到该百分比视为「看完」
+  finished_percent: 95
+  # 「继续观看」列表最多返回条数
+  continue_watch_limit: 12
+  # 相关推荐返回条数（同分类优先）
+  related_limit: 8
+  # 首页每个分类板块展示的视频数
+  home_section_size: 12
+  # 视频列表每页条数
+  page_size: 20
+
+# -----------------------------------------------------------------------------
+# 日志
+# -----------------------------------------------------------------------------
+log:
+  level: "DEBUG" # DEBUG / INFO / WARNING / ERROR
+  console: true
+  file: true
+  file_name: "backend.log"
+  max_bytes: 10485760 # 10MB 轮转
+  backup_count: 5
+  access_log: true
+
+# -----------------------------------------------------------------------------
+# 开发 / 调试
+# -----------------------------------------------------------------------------
+dev:
+  # uvicorn 热重载（生产请关闭）
+  reload: false
+  reload_dirs: ["backend"]
+  # 是否开启 /docs 与 /redoc（FastAPI 自带交互文档）
+  enable_api_docs: true
+  # 响应中是否返回异常堆栈
+  expose_traceback: false

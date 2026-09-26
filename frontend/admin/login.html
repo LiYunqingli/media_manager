@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>管理端登录 - MediaManager</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('mm_theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        var h = document.documentElement;
+        h.setAttribute('data-theme', t);
+        h.classList.toggle('dark', t === 'dark');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/vendor/element-plus.css" />
+  <link rel="stylesheet" href="/static/vendor/element-plus-dark.css" />
+  <link rel="stylesheet" href="/static/css/common.css" />
+  <link rel="stylesheet" href="/static/css/admin.css" />
+</head>
+<body>
+  <div id="app" v-cloak>
+    <div class="login-page">
+      <div class="login-box" style="position:relative">
+        <button class="theme-toggle" style="position:absolute;right:14px;top:14px"
+                @click="toggleTheme" :title="theme === 'dark' ? '切换到亮色' : '切换到暗色'">
+          {{ theme === 'dark' ? '☀' : '☾' }}
+        </button>
+
+        <div class="login-box__logo">M</div>
+        <h1 class="login-box__title">管理端登录</h1>
+        <p class="login-box__sub">MediaManager 视频管理系统</p>
+
+        <el-form @submit.prevent="submit" label-position="top">
+          <el-form-item label="管理员账号">
+            <el-input v-model.trim="form.username" placeholder="请输入管理员账号"
+                      size="large" :prefix-icon="icons.User" clearable></el-input>
+          </el-form-item>
+          <el-form-item label="登录密码">
+            <el-input v-model="form.password" type="password" placeholder="请输入密码"
+                      size="large" show-password :prefix-icon="icons.Lock"
+                      @keyup.enter="submit"></el-input>
+          </el-form-item>
+          <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon
+                    style="margin-bottom:12px"></el-alert>
+          <el-button type="primary" size="large" style="width:100%" :loading="loading"
+                     @click="submit">
+            {{ loading ? '登录中…' : '登 录' }}
+          </el-button>
+        </el-form>
+
+        <div class="login-tip">
+          仅管理员账号可登录本入口。<br />
+          内置账号：<span class="mm-mono">admin / admin123</span>
+        </div>
+        <div style="text-align:center;margin-top:14px;font-size:12px">
+          <a href="/login.html" style="color:var(--text-3)">← 返回用户端登录</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/vendor/vue.global.prod.js"></script>
+  <script src="/static/vendor/element-plus.min.js"></script>
+  <script src="/static/vendor/element-plus-zh-cn.min.js"></script>
+  <script src="/static/vendor/element-plus-icons.js"></script>
+  <script src="/static/js/config.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/ui.js"></script>
+  <script src="/static/js/request.js"></script>
+  <script src="/static/js/components-web.js"></script>
+  <script src="/static/js/admin-common.js"></script>
+  <script>
+    (function () {
+      var util = MM.util;
+
+      MM.bootAdmin({
+        data: function () {
+          return {
+            theme: MM.ui.getTheme(),
+            icons: window.ElementPlusIconsVue || {},
+            loading: false,
+            error: '',
+            form: { username: '', password: '' }
+          };
+        },
+        methods: {
+          toggleTheme: function () {
+            this.theme = MM.ui.toggleTheme();
+          },
+          submit: function () {
+            var self = this;
+            if (!self.form.username || !self.form.password) {
+              self.error = '请输入账号和密码';
+              return;
+            }
+            self.loading = true;
+            self.error = '';
+            MM.http
+              .post('/admin/auth/login', self.form)
+              .then(function (data) {
+                MM.auth.setToken(data.token);
+                MM.auth.setUser(data.user);
+                MM.ui.success('登录成功，正在进入管理端…');
+                var redirect = util.query('redirect', '');
+                setTimeout(function () {
+                  window.location.replace(redirect || MM.config.PATHS.adminHome);
+                }, 420);
+              })
+              .catch(function (err) {
+                self.error = (err && err.message) || '登录失败';
+                self.loading = false;
+              });
+          }
+        }
+      }, { guest: true });
+    })();
+  </script>
+</body>
+</html>

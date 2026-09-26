@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>系统信息 - MediaManager 管理端</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('mm_theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        var h = document.documentElement;
+        h.setAttribute('data-theme', t);
+        h.classList.toggle('dark', t === 'dark');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/vendor/element-plus.css" />
+  <link rel="stylesheet" href="/static/vendor/element-plus-dark.css" />
+  <link rel="stylesheet" href="/static/css/common.css" />
+  <link rel="stylesheet" href="/static/css/web.css" />
+  <link rel="stylesheet" href="/static/css/admin.css" />
+</head>
+<body>
+  <div id="app" v-cloak>
+    <admin-shell title="系统信息" crumb="系统 / 信息" active="settings">
+
+      <div v-if="loading" style="padding:40px;text-align:center">
+        <el-skeleton :rows="6" animated></el-skeleton>
+      </div>
+
+      <template v-else>
+        <div class="mm-card">
+          <div class="mm-card__head">
+            <span class="mm-card__title">⚙ 运行环境与配置</span>
+            <el-button size="small" @click="load">刷新</el-button>
+          </div>
+          <div class="mm-card__body">
+            <el-descriptions :column="2" border size="small">
+              <el-descriptions-item label="应用名称">{{ sys.app.name }}</el-descriptions-item>
+              <el-descriptions-item label="版本">{{ sys.app.version }}</el-descriptions-item>
+              <el-descriptions-item label="时区">{{ sys.app.timezone }}</el-descriptions-item>
+              <el-descriptions-item label="配置文件">
+                <span class="mm-mono" style="font-size:11.5px">{{ sys.config_path }}</span>
+              </el-descriptions-item>
+
+              <el-descriptions-item label="存储根目录" :span="2">
+                <span class="mm-mono" style="font-size:11.5px">{{ sys.storage.root }}</span>
+              </el-descriptions-item>
+              <el-descriptions-item label="存储占用">{{ sys.storage.usage_text }}</el-descriptions-item>
+              <el-descriptions-item label="分片大小">{{ sys.storage.chunk_size_text }}</el-descriptions-item>
+
+              <el-descriptions-item label="数据库连接池">
+                空闲 {{ sys.database_pool.idle }} / 已建 {{ sys.database_pool.created }} / 上限 {{ sys.database_pool.max }}
+              </el-descriptions-item>
+              <el-descriptions-item label="登录有效期">
+                {{ Math.round((sys.security.token_expire_minutes || 0) / 60 / 24) }} 天
+                （{{ sys.security.token_expire_minutes }} 分钟）
+              </el-descriptions-item>
+
+              <el-descriptions-item label="播放次数阈值">
+                单次会话累计观看 ≥ {{ sys.business.view_threshold_seconds }} 秒计 1 次
+              </el-descriptions-item>
+              <el-descriptions-item label="上报心跳间隔">{{ sys.business.heartbeat_interval }} 秒</el-descriptions-item>
+
+              <el-descriptions-item label="抽帧能力" :span="2">
+                <div class="mm-row mm-wrap" style="gap:6px">
+                  <el-tag :type="sys.media_backend.av ? 'success' : 'info'" size="small">
+                    PyAV {{ sys.media_backend.av ? '可用' : '未安装' }}
+                  </el-tag>
+                  <el-tag :type="sys.media_backend.cv2 ? 'success' : 'info'" size="small">
+                    OpenCV {{ sys.media_backend.cv2 ? '可用' : '未安装' }}
+                  </el-tag>
+                  <el-tag :type="sys.media_backend.PIL ? 'success' : 'info'" size="small">
+                    Pillow {{ sys.media_backend.PIL ? '可用' : '未安装' }}
+                  </el-tag>
+                  <el-tag :type="sys.media_backend.numpy ? 'success' : 'info'" size="small">
+                    numpy {{ sys.media_backend.numpy ? '可用' : '未安装' }}
+                  </el-tag>
+                  <el-tag :type="sys.can_extract_cover ? 'success' : 'danger'" size="small">
+                    自动抽帧封面：{{ sys.can_extract_cover ? '可用' : '不可用' }}
+                  </el-tag>
+                  <el-tag type="success" size="small">内置 MP4 解析（时长/分辨率）</el-tag>
+                </div>
+                <div v-if="!sys.can_extract_cover" style="font-size:12px;color:var(--danger);margin-top:6px">
+                  ⚠ 未检测到 opencv-python 或 av，上传视频时将无法自动提取关键帧封面。
+                  请执行：<span class="mm-mono">pip install opencv-python-headless</span>
+                </div>
+              </el-descriptions-item>
+            </el-descriptions>
+          </div>
+        </div>
+
+        <div class="mm-card mm-mt-16">
+          <div class="mm-card__head"><span class="mm-card__title">🔗 入口地址</span></div>
+          <div class="mm-card__body">
+            <div class="mm-col" style="gap:10px">
+              <div class="mm-row">
+                <span style="width:90px;color:var(--text-3);font-size:13px">用户端</span>
+                <el-input :model-value="base + '/'" readonly>
+                  <template #append><el-button @click="open(base + '/')">打开</el-button></template>
+                </el-input>
+              </div>
+              <div class="mm-row">
+                <span style="width:90px;color:var(--text-3);font-size:13px">管理端</span>
+                <el-input :model-value="base + '/admin/'" readonly>
+                  <template #append><el-button @click="open(base + '/admin/')">打开</el-button></template>
+                </el-input>
+              </div>
+              <div class="mm-row">
+                <span style="width:90px;color:var(--text-3);font-size:13px">接口文档</span>
+                <el-input :model-value="base + '/docs'" readonly>
+                  <template #append><el-button @click="open(base + '/docs')">打开</el-button></template>
+                </el-input>
+              </div>
+              <div class="mm-row">
+                <span style="width:90px;color:var(--text-3);font-size:13px">健康检查</span>
+                <el-input :model-value="base + '/api/health'" readonly>
+                  <template #append><el-button @click="open(base + '/api/health')">打开</el-button></template>
+                </el-input>
+              </div>
+            </div>
+            <div class="mm-field__hint mm-mt-16">
+              局域网访问时，把 host 换成运行后端的机器内网 IP 即可（需把 <span class="mm-mono">app.host</span> 配成
+              <span class="mm-mono">0.0.0.0</span> 并放通防火墙端口）。
+            </div>
+          </div>
+        </div>
+
+        <div class="mm-card mm-mt-16">
+          <div class="mm-card__head"><span class="mm-card__title">📖 快速上手</span></div>
+          <div class="mm-card__body" style="font-size:13px;color:var(--text-2);line-height:1.9">
+            <p style="margin:0 0 8px"><b>1. 建库</b>：执行 <span class="mm-mono">sql/media_manager.sql</span></p>
+            <p style="margin:0 0 8px"><b>2. 配库</b>：编辑 <span class="mm-mono">config/config.yaml</span> 中的 database 段</p>
+            <p style="margin:0 0 8px"><b>3. 装依赖</b>：<span class="mm-mono">pip install -r backend/requirements.txt</span></p>
+            <p style="margin:0 0 8px"><b>4. 启动</b>：<span class="mm-mono">python backend/run.py</span></p>
+            <p style="margin:0 0 8px">
+              <b>5. 登录</b>：管理员 <span class="mm-mono">admin / admin123</span>；
+              测试用户 <span class="mm-mono">user1 / user123</span>
+            </p>
+            <p style="margin:0">
+              <b>6. 上传</b>：管理端「上传视频」支持分片上传、断点续传、秒传、自动抽帧封面
+            </p>
+            <el-divider ></el-divider>
+            <p style="margin:0">详细文档见项目 <span class="mm-mono">doc/</span> 目录（架构、数据库、API、部署、播放器、权限模型等）。</p>
+          </div>
+        </div>
+      </template>
+
+    </admin-shell>
+  </div>
+
+  <script src="/static/vendor/vue.global.prod.js"></script>
+  <script src="/static/vendor/element-plus.min.js"></script>
+  <script src="/static/vendor/element-plus-zh-cn.min.js"></script>
+  <script src="/static/vendor/element-plus-icons.js"></script>
+  <script src="/static/js/config.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/ui.js"></script>
+  <script src="/static/js/request.js"></script>
+  <script src="/static/js/components-web.js"></script>
+  <script src="/static/js/admin-common.js"></script>
+  <script>
+    MM.bootAdmin({
+      data: function () {
+        return {
+          loading: true,
+          base: window.location.origin,
+          sys: {
+            app: {},
+            storage: {},
+            database_pool: {},
+            security: {},
+            business: {},
+            media_backend: {}
+          }
+        };
+      },
+      mounted: function () {
+        this.load();
+      },
+      methods: {
+        load: function () {
+          var self = this;
+          self.loading = true;
+          MM.http
+            .get('/admin/stats/system')
+            .then(function (data) {
+              self.sys = data;
+              self.loading = false;
+            })
+            .catch(function (err) {
+              self.loading = false;
+              MM.http.toastError(err);
+            });
+        },
+        open: function (url) {
+          window.open(url, '_blank');
+        }
+      }
+    });
+  </script>
+</body>
+</html>

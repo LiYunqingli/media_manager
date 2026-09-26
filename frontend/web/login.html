@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>登录 - MediaManager</title>
+  <script>
+    // 提前应用主题，避免首屏闪白
+    (function () {
+      try {
+        var t = localStorage.getItem('mm_theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        var h = document.documentElement;
+        h.setAttribute('data-theme', t);
+        h.classList.toggle('dark', t === 'dark');
+        h.classList.toggle('van-theme-dark', t === 'dark');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/vendor/vant.css" />
+  <link rel="stylesheet" href="/static/css/common.css" />
+  <link rel="stylesheet" href="/static/css/web.css" />
+</head>
+<body>
+  <div id="app" v-cloak>
+    <div class="login-page">
+      <div class="login-box" style="position:relative">
+        <button class="theme-toggle" style="position:absolute;right:14px;top:14px"
+                @click="toggleTheme" :title="theme === 'dark' ? '切换到亮色' : '切换到暗色'">
+          {{ theme === 'dark' ? '☀' : '☾' }}
+        </button>
+
+        <div class="login-box__logo">M</div>
+        <h1 class="login-box__title">MediaManager</h1>
+        <p class="login-box__sub">视频管理系统 · 用户端</p>
+
+        <form @submit.prevent="submit" class="mm-col" style="gap:14px">
+          <div class="mm-field">
+            <label class="mm-field__label">登录账号</label>
+            <input class="mm-input" v-model.trim="form.username" placeholder="请输入账号"
+                   autocomplete="username" autofocus />
+          </div>
+          <div class="mm-field">
+            <label class="mm-field__label">登录密码</label>
+            <input class="mm-input" type="password" v-model="form.password" placeholder="请输入密码"
+                   autocomplete="current-password" />
+          </div>
+          <div v-if="error" class="mm-tag mm-tag--danger" style="height:auto;padding:8px 10px;white-space:normal">
+            {{ error }}
+          </div>
+          <button class="mm-btn mm-btn--primary mm-btn--lg mm-btn--block" type="submit" :disabled="loading">
+            {{ loading ? '登录中…' : '登 录' }}
+          </button>
+        </form>
+
+        <div class="login-tip">
+          系统不开放自助注册，账号由管理员在<strong>管理端</strong>创建并分配可见分类。<br />
+          内置测试账号：<span class="mm-mono">user1 / user123</span>
+        </div>
+        <div style="text-align:center;margin-top:14px;font-size:12px">
+          <a href="/admin/login.html" style="color:var(--text-3)">管理员入口 →</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/vendor/vue.global.prod.js"></script>
+  <script src="/static/vendor/vant.min.js"></script>
+  <script src="/static/js/config.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/ui.js"></script>
+  <script src="/static/js/request.js"></script>
+  <script src="/static/js/components-web.js"></script>
+  <script src="/static/js/layout-web.js"></script>
+  <script>
+    (function () {
+      var util = MM.util;
+
+      MM.bootWeb({
+        data: function () {
+          return {
+            theme: MM.ui.getTheme(),
+            loading: false,
+            error: '',
+            form: { username: '', password: '' }
+          };
+        },
+        methods: {
+          toggleTheme: function () {
+            this.theme = MM.ui.toggleTheme();
+          },
+          submit: function () {
+            var self = this;
+            if (!self.form.username || !self.form.password) {
+              self.error = '请输入账号和密码';
+              return;
+            }
+            self.loading = true;
+            self.error = '';
+            MM.http
+              .post('/auth/login', self.form)
+              .then(function (data) {
+                MM.auth.setToken(data.token);
+                MM.auth.setUser(data.user);
+
+                // 管理端账号误入用户端时给出提示（用户端仍可用，仅提示）
+                var redirect = util.query('redirect', '');
+                MM.ui.success('登录成功');
+                setTimeout(function () {
+                  if (redirect) window.location.replace(redirect);
+                  else util.go(MM.config.PATHS.webHome);
+                }, 420);
+              })
+              .catch(function (err) {
+                self.error = (err && err.message) || '登录失败';
+                self.loading = false;
+              });
+          }
+        }
+        // 未指定 template，Vue 直接使用 #app 的 innerHTML 作为模板
+      }, { guest: true });
+    })();
+  </script>
+</body>
+</html>

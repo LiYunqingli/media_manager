@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>首页 - MediaManager</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('mm_theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        var h = document.documentElement;
+        h.setAttribute('data-theme', t);
+        h.classList.toggle('dark', t === 'dark');
+        h.classList.toggle('van-theme-dark', t === 'dark');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/vendor/vant.css" />
+  <link rel="stylesheet" href="/static/css/common.css" />
+  <link rel="stylesheet" href="/static/css/web.css" />
+</head>
+<body>
+  <div id="app" v-cloak>
+    <web-shell :user="user" active="home">
+
+      <!-- 加载骨架 -->
+      <v-skeleton v-if="loading" :count="10"></v-skeleton>
+
+      <template v-else>
+        <!-- ============================= 轮播 ============================= -->
+        <section class="hero" v-if="banners.length">
+          <div v-for="(b, i) in banners" :key="b.id"
+               class="hero__slide" :class="{ 'hero__slide--active': i === heroIndex }"
+               @click="openVideo(b)">
+            <img v-if="b.cover_url" :src="b.cover_url" :alt="b.title" />
+            <div v-else class="v-card__placeholder" :style="{ background: grad(b.title), fontSize: '48px' }">
+              {{ initials(b.title) }}
+            </div>
+            <div class="hero__mask"></div>
+            <div class="hero__content">
+              <span class="hero__tag">推荐</span>
+              <h2 class="hero__title">{{ b.title }}</h2>
+              <p class="hero__desc">{{ b.description || '精彩内容，点击立即播放' }}</p>
+              <div class="hero__meta">
+                <span>{{ b.category_name || '未分类' }}</span>
+                <span>{{ b.duration_text }}</span>
+                <span>{{ count(b.view_count) }} 次播放</span>
+              </div>
+            </div>
+          </div>
+          <div class="hero__dots">
+            <span v-for="(b, i) in banners" :key="'d' + b.id"
+                  class="hero__dot" :class="{ 'hero__dot--active': i === heroIndex }"
+                  @click.stop="heroIndex = i"></span>
+          </div>
+        </section>
+
+        <!-- ======================== 继续观看 ======================== -->
+        <section class="mm-section" v-if="home.continue_watch && home.continue_watch.length">
+          <div class="mm-section__head">
+            <h2 class="mm-section__title">继续观看</h2>
+            <span class="mm-section__more" @click="goHistory">全部历史 →</span>
+          </div>
+          <div class="h-scroll no-scrollbar">
+            <div class="v-card" v-for="h in home.continue_watch" :key="'c' + h.video_id" @click="openVideo(h)">
+              <div class="v-card__cover">
+                <img v-if="h.cover_url" :src="h.cover_url" :alt="h.title" loading="lazy" />
+                <div v-else class="v-card__placeholder" :style="{ background: grad(h.title) }">{{ initials(h.title) }}</div>
+                <span class="v-card__duration">{{ h.duration_text }}</span>
+                <div class="v-card__progress"><span :style="{ width: Math.min(h.progress, 100) + '%' }"></span></div>
+              </div>
+              <div class="v-card__body">
+                <div class="v-card__title">{{ h.title }}</div>
+                <div class="v-card__meta">
+                  <span>看到 {{ h.last_position_text }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================== 热门 ========================== -->
+        <section class="mm-section" v-if="home.hot && home.hot.length">
+          <div class="mm-section__head">
+            <h2 class="mm-section__title">🔥 热门推荐</h2>
+          </div>
+          <div class="mm-grid">
+            <v-card v-for="v in home.hot.slice(0, 12)" :key="'h' + v.id" :video="v"></v-card>
+          </div>
+        </section>
+
+        <!-- ====================== 分类板块（按分类聚合）====================== -->
+        <section class="mm-section" v-for="s in home.sections" :key="'s' + s.category.id">
+          <div class="mm-section__head">
+            <h2 class="mm-section__title">{{ s.category.name }}</h2>
+            <span class="mm-section__more" @click="goCategory(s.category.id)">
+              查看全部（{{ s.category.video_count }}）→
+            </span>
+          </div>
+          <div class="mm-grid">
+            <v-card v-for="v in s.videos" :key="s.category.id + '-' + v.id" :video="v"></v-card>
+          </div>
+        </section>
+
+        <!-- ========================== 最新 ========================== -->
+        <section class="mm-section" v-if="home.latest && home.latest.length">
+          <div class="mm-section__head">
+            <h2 class="mm-section__title">🆕 最新上传</h2>
+          </div>
+          <div class="mm-grid">
+            <v-card v-for="v in home.latest" :key="'n' + v.id" :video="v"></v-card>
+          </div>
+        </section>
+
+        <mm-empty v-if="empty" icon="🎬" text="还没有可观看的视频，请联系管理员上传或检查你的可见权限">
+        </mm-empty>
+      </template>
+
+    </web-shell>
+  </div>
+
+  <script src="/static/vendor/vue.global.prod.js"></script>
+  <script src="/static/vendor/vant.min.js"></script>
+  <script src="/static/js/config.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/ui.js"></script>
+  <script src="/static/js/request.js"></script>
+  <script src="/static/js/components-web.js"></script>
+  <script src="/static/js/layout-web.js"></script>
+  <script>
+    (function () {
+      var util = MM.util;
+
+      MM.bootWeb({
+        data: function () {
+          return {
+            user: MM.auth.getUser() || {},
+            loading: true,
+            heroIndex: 0,
+            heroTimer: null,
+            home: { banners: [], hot: [], latest: [], continue_watch: [], sections: [] }
+          };
+        },
+        computed: {
+          banners: function () {
+            return this.home.banners || [];
+          },
+          empty: function () {
+            return (
+              !this.home.hot.length && !this.home.latest.length && !this.home.sections.length
+            );
+          }
+        },
+        mounted: function () {
+          this.load();
+        },
+        unmounted: function () {
+          if (this.heroTimer) clearInterval(this.heroTimer);
+        },
+        methods: {
+          load: function () {
+            var self = this;
+            self.loading = true;
+            MM.http
+              .get('/client/home')
+              .then(function (data) {
+                self.home = data;
+                self.loading = false;
+                self.startHero();
+              })
+              .catch(function (err) {
+                self.loading = false;
+                MM.http.toastError(err);
+              });
+          },
+          startHero: function () {
+            var self = this;
+            if (self.heroTimer) clearInterval(self.heroTimer);
+            if ((self.home.banners || []).length <= 1) return;
+            self.heroTimer = setInterval(function () {
+              self.heroIndex = (self.heroIndex + 1) % self.home.banners.length;
+            }, 5000);
+          },
+          openVideo: function (v) {
+            util.go(MM.config.PATHS.webDetail, { id: v.id, resume: 1 });
+          },
+          goCategory: function (id) {
+            util.go(MM.config.PATHS.webCategory, { id: id });
+          },
+          goHistory: function () {
+            util.go(MM.config.PATHS.webHistory);
+          },
+          grad: function (t) {
+            return util.coverGradient(t);
+          },
+          initials: function (t) {
+            return util.coverInitials(t);
+          },
+          count: function (n) {
+            return util.formatCount(n);
+          }
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

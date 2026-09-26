@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>分类 - MediaManager</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('mm_theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        var h = document.documentElement;
+        h.setAttribute('data-theme', t);
+        h.classList.toggle('dark', t === 'dark');
+        h.classList.toggle('van-theme-dark', t === 'dark');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/vendor/vant.css" />
+  <link rel="stylesheet" href="/static/css/common.css" />
+  <link rel="stylesheet" href="/static/css/web.css" />
+</head>
+<body>
+  <div id="app" v-cloak>
+    <web-shell :user="user" :active="'cat-' + categoryId">
+      <div class="detail-layout">
+
+        <div>
+          <!-- 分类头 -->
+          <div class="mm-card mm-mb-16" v-if="category">
+            <div class="mm-card__body mm-row mm-wrap" style="align-items:flex-start">
+              <div style="width:120px;aspect-ratio:16/9;border-radius:8px;overflow:hidden;background:var(--panel-2);flex:none">
+                <img v-if="category.cover_url" :src="category.cover_url" style="width:100%;height:100%;object-fit:cover" />
+                <div v-else class="v-card__placeholder" :style="{ background: grad(category.name) }">
+                  {{ initials(category.name) }}
+                </div>
+              </div>
+              <div class="mm-grow">
+                <h1 style="font-size:19px;margin-bottom:6px">{{ category.name }}</h1>
+                <p style="font-size:13px;color:var(--text-3);margin:0">
+                  {{ category.description || '该分类暂无描述' }}
+                </p>
+                <div class="mm-row mm-mt-8" style="gap:14px;font-size:12.5px;color:var(--text-3)">
+                  <span>共 {{ total }} 个视频</span>
+                  <span>第 {{ page }} / {{ pages }} 页</span>
+                </div>
+              </div>
+              <div class="mm-row">
+                <select class="mm-select" v-model="orderBy" @change="reload" style="width:auto">
+                  <option value="created_at">最新发布</option>
+                  <option value="view_count">最多播放</option>
+                  <option value="duration">时长优先</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <v-skeleton v-if="loading" :count="8"></v-skeleton>
+
+          <template v-else>
+            <div class="mm-grid" v-if="videos.length">
+              <v-card v-for="v in videos" :key="v.id" :video="v"></v-card>
+            </div>
+            <mm-empty v-else icon="📂" text="该分类下暂时没有视频"></mm-empty>
+            <mm-pager :page="page" :pages="pages" :total="total" @change="changePage"></mm-pager>
+          </template>
+        </div>
+
+        <!-- 右侧：其他分类推荐 -->
+        <aside class="related-panel">
+          <div class="mm-card">
+            <div class="mm-card__head">
+              <span class="mm-card__title">🧭 换个分类看看</span>
+            </div>
+            <div class="mm-card__body" style="padding:8px">
+              <div class="related-list" style="max-height:none">
+                <div class="v-item" v-for="c in otherCategories" :key="'c' + c.id" @click="goCategory(c.id)">
+                  <div class="v-item__cover" style="width:96px">
+                    <img v-if="c.cover_url" :src="c.cover_url" />
+                    <div v-else class="v-card__placeholder" :style="{ background: grad(c.name), fontSize:14 }">
+                      {{ initials(c.name) }}
+                    </div>
+                  </div>
+                  <div class="v-item__info">
+                    <div class="v-item__title">{{ c.name }}</div>
+                    <div class="v-card__meta"><span>{{ c.video_count }} 个视频</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mm-card mm-mt-16" v-if="hot.length">
+            <div class="mm-card__head">
+              <span class="mm-card__title">🔥 全站热门</span>
+            </div>
+            <div class="mm-card__body" style="padding:8px">
+              <v-item v-for="(v, i) in hot" :key="'h' + v.id" :video="v" :index="i + 1"></v-item>
+            </div>
+          </div>
+        </aside>
+
+      </div>
+    </web-shell>
+  </div>
+
+  <script src="/static/vendor/vue.global.prod.js"></script>
+  <script src="/static/vendor/vant.min.js"></script>
+  <script src="/static/js/config.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/ui.js"></script>
+  <script src="/static/js/request.js"></script>
+  <script src="/static/js/components-web.js"></script>
+  <script src="/static/js/layout-web.js"></script>
+  <script>
+    (function () {
+      var util = MM.util;
+
+      MM.bootWeb({
+        data: function () {
+          return {
+            user: MM.auth.getUser() || {},
+            categoryId: Number(util.query('id', 0)),
+            category: null,
+            videos: [],
+            allCategories: [],
+            hot: [],
+            page: Number(util.query('page', 1)),
+            pageSize: MM.config.PAGE_SIZE,
+            total: 0,
+            pages: 1,
+            orderBy: 'created_at',
+            loading: true
+          };
+        },
+        computed: {
+          otherCategories: function () {
+            var self = this;
+            return this.allCategories.filter(function (c) {
+              return c.id !== self.categoryId;
+            });
+          }
+        },
+        mounted: function () {
+          this.loadCategories();
+          this.loadHot();
+          if (this.categoryId) this.load();
+          else this.loading = false;
+        },
+        methods: {
+          loadCategories: function () {
+            var self = this;
+            MM.http
+              .get('/client/categories')
+              .then(function (list) {
+                self.allCategories = list || [];
+                if (!self.category && self.categoryId) {
+                  var found = self.allCategories.filter(function (c) {
+                    return c.id === self.categoryId;
+                  })[0];
+                  if (found) self.category = found;
+                }
+              })
+              .catch(function () {});
+          },
+          loadHot: function () {
+            var self = this;
+            MM.http
+              .get('/client/videos', { page: 1, page_size: 8, order_by: 'view_count' })
+              .then(function (data) {
+                self.hot = (data.list || []).filter(function (v) {
+                  return v.id !== 0;
+                }).slice(0, 6);
+              })
+              .catch(function () {});
+          },
+          load: function () {
+            var self = this;
+            self.loading = true;
+            MM.http
+              .get('/client/categories/' + self.categoryId, {
+                page: self.page,
+                page_size: self.pageSize,
+                order_by: self.orderBy
+              })
+              .then(function (data) {
+                self.videos = data.list || [];
+                self.total = data.total || 0;
+                self.pages = data.pages || 1;
+                self.category = data.category || self.category;
+                self.loading = false;
+                document.title = (self.category ? self.category.name : '分类') + ' - MediaManager';
+              })
+              .catch(function (err) {
+                self.loading = false;
+                MM.http.toastError(err);
+              });
+          },
+          reload: function () {
+            this.page = 1;
+            this.load();
+          },
+          changePage: function (p) {
+            this.page = p;
+            this.load();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          },
+          goCategory: function (id) {
+            util.go(MM.config.PATHS.webCategory, { id: id });
+          },
+          grad: function (t) {
+            return util.coverGradient(t);
+          },
+          initials: function (t) {
+            return util.coverInitials(t);
+          }
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

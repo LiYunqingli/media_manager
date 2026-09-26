@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>视频管理 - MediaManager 管理端</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('mm_theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        var h = document.documentElement;
+        h.setAttribute('data-theme', t);
+        h.classList.toggle('dark', t === 'dark');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/vendor/element-plus.css" />
+  <link rel="stylesheet" href="/static/vendor/element-plus-dark.css" />
+  <link rel="stylesheet" href="/static/css/common.css" />
+  <link rel="stylesheet" href="/static/css/web.css" />
+  <link rel="stylesheet" href="/static/css/admin.css" />
+</head>
+<body>
+  <div id="app" v-cloak>
+    <admin-shell title="视频管理" crumb="内容 / 视频管理" active="videos">
+
+      <!-- 工具栏 -->
+      <div class="toolbar">
+        <span class="toolbar__title">🎬 视频库（{{ total }}）</span>
+        <div class="mm-row mm-wrap">
+          <el-input v-model.trim="query.keyword" placeholder="搜索标题/简介" clearable style="width:190px"
+                    @keyup.enter="reload" @clear="reload"></el-input>
+          <el-select v-model="query.category_id" placeholder="全部分类" clearable style="width:150px" @change="reload">
+            <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id"></el-option>
+          </el-select>
+          <el-select v-model="query.status" placeholder="全部状态" clearable style="width:120px" @change="reload">
+            <el-option label="已上架" value="1"></el-option>
+            <el-option label="已下架" value="0"></el-option>
+          </el-select>
+          <el-select v-model="query.order_by" style="width:140px" @change="reload">
+            <el-option label="按上传时间" value="created_at"></el-option>
+            <el-option label="按播放量" value="view_count"></el-option>
+            <el-option label="按时长" value="duration"></el-option>
+            <el-option label="按标题" value="title"></el-option>
+            <el-option label="按ID" value="id"></el-option>
+          </el-select>
+          <el-button @click="reload">查询</el-button>
+          <el-button type="primary" @click="goUpload">上传视频</el-button>
+        </div>
+      </div>
+
+      <!-- 表格 -->
+      <div class="mm-card" style="overflow:hidden">
+        <el-table :data="list" v-loading="loading" stripe style="width:100%" row-key="id">
+          <el-table-column label="封面" width="132">
+            <template #default="{ row }">
+              <div class="file-thumb" style="cursor:pointer" @click="preview(row)">
+                <img v-if="row.cover_url" :src="row.cover_url" />
+                <div v-else class="v-card__placeholder" :style="{ background: grad(row.title), fontSize: 14 }">
+                  {{ initials(row.title) }}
+                </div>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="标题" min-width="220">
+            <template #default="{ row }">
+              <div style="font-weight:500" class="mm-clamp-2">{{ row.title }}</div>
+              <div style="font-size:11.5px;color:var(--text-3)">
+                #{{ row.id }} · {{ row.original_name || '—' }}
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="分类" width="110">
+            <template #default="{ row }">
+              <span class="mm-tag mm-tag--muted">{{ row.category_name || '未分类' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="时长" width="92">
+            <template #default="{ row }">
+              <span class="mm-mono">{{ row.duration_text }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="大小" width="100">
+            <template #default="{ row }">
+              <span class="mm-mono">{{ row.size_text }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="分辨率" width="110">
+            <template #default="{ row }">
+              <span class="mm-mono" style="font-size:12px" v-if="row.width">{{ row.width }}×{{ row.height }}</span>
+              <span v-else class="mm-muted">—</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="播放" width="88">
+            <template #default="{ row }">
+              <span class="mm-mono">{{ fmt(row.view_count) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="收藏" width="80">
+            <template #default="{ row }">
+              <span class="mm-mono">{{ row.favorite_count }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="封面来源" width="96">
+            <template #default="{ row }">
+              <span class="mm-tag" :class="row.cover_source === 1 ? '' : 'mm-tag--muted'">
+                {{ row.cover_source === 1 ? '自定义' : '自动抽帧' }}
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="88">
+            <template #default="{ row }">
+              <el-tag :type="row.status ? 'success' : 'info'" size="small">
+                {{ row.status ? '已上架' : '已下架' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="上传时间" width="150">
+            <template #default="{ row }">
+              <span style="font-size:12px" class="mm-muted">{{ dateText(row.created_at) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="230" fixed="right">
+            <template #default="{ row }">
+              <el-button size="small" @click="openEdit(row)">编辑</el-button>
+              <el-dropdown trigger="click" @command="onCommand($event, row)">
+                <el-button size="small">更多<el-icon><arrow-down></arrow-down></el-icon></el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="frame">从关键帧重抽封面</el-dropdown-item>
+                    <el-dropdown-item command="upload-cover">上传自定义封面</el-dropdown-item>
+                    <el-dropdown-item command="refresh">重新解析时长</el-dropdown-item>
+                    <el-dropdown-item command="toggle">{{ row.status ? '下架' : '上架' }}</el-dropdown-item>
+                    <el-dropdown-item command="copy" divided>复制播放直链</el-dropdown-item>
+                    <el-dropdown-item command="delete" divided style="color:var(--danger)">删除视频</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </template>
+          </el-table-column>
+          <template #empty>
+            <el-empty description="暂无视频，先去上传一个吧">
+              <el-button type="primary" @click="goUpload">上传视频</el-button>
+            </el-empty>
+          </template>
+        </el-table>
+      </div>
+
+      <div class="mm-pager">
+        <span class="mm-pager__info">共 {{ total }} 条 / {{ pages }} 页</span>
+        <el-pagination background layout="prev, pager, next, jumper" :total="total"
+                       :page-size="query.page_size" :current-page="query.page"
+                       @current-change="changePage"></el-pagination>
+      </div>
+
+      <!-- ===================== 编辑弹窗 ===================== -->
+      <el-dialog v-model="editVisible" title="编辑视频" width="640px" :close-on-click-modal="false">
+        <div v-if="current" style="display:grid;grid-template-columns:200px 1fr;gap:18px">
+          <div>
+            <div class="cover-preview">
+              <img v-if="form.cover_url" :src="form.cover_url" />
+              <div v-else class="cover-preview__empty">暂无封面</div>
+            </div>
+            <div class="mm-col mm-mt-8" style="gap:6px">
+              <el-button size="small" @click="pickCover">上传封面</el-button>
+              <el-button size="small" @click="coverFromFrame">从关键帧重抽</el-button>
+              <el-input v-model.number="frameSeek" size="small" placeholder="抽帧时间点(秒)">
+                <template #prepend>秒</template>
+              </el-input>
+              <el-button size="small" @click="refreshMeta">重新解析元信息</el-button>
+              <input ref="coverInput" type="file" accept="image/*" style="display:none" @change="onCoverPick" />
+            </div>
+          </div>
+          <div class="mm-col" style="gap:14px">
+            <div class="mm-field">
+              <label class="mm-field__label">标题 *</label>
+              <el-input v-model.trim="form.title" maxlength="255" show-word-limit></el-input>
+            </div>
+            <div class="mm-field">
+              <label class="mm-field__label">所属分类 *</label>
+              <el-select v-model="form.category_id" style="width:100%">
+                <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id"></el-option>
+              </el-select>
+            </div>
+            <div class="mm-field">
+              <label class="mm-field__label">简介</label>
+              <el-input v-model="form.description" type="textarea" :rows="4"></el-input>
+            </div>
+            <div class="mm-row">
+              <div class="mm-field mm-grow">
+                <label class="mm-field__label">排序值（越大越靠前）</label>
+                <el-input-number v-model="form.sort" :min="-9999" :max="9999" style="width:100%"></el-input-number>
+              </div>
+              <div class="mm-field" style="padding-top:22px">
+                <el-checkbox v-model="form.status" :true-value="1" :false-value="0">已上架</el-checkbox>
+              </div>
+            </div>
+            <div class="mm-field__hint">
+              视频ID #{{ current.id }} · 时长 {{ current.duration_text }} · 大小 {{ current.size_text }}
+              （{{ current.file_exists ? '文件存在' : '⚠ 文件缺失' }}）
+            </div>
+          </div>
+        </div>
+        <template #footer>
+          <el-button @click="editVisible = false">取消</el-button>
+          <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+        </template>
+      </el-dialog>
+
+      <!-- 预览弹窗 -->
+      <el-dialog v-model="previewVisible" :title="previewRow ? previewRow.title : ''" width="760px" top="6vh">
+        <video v-if="previewRow" :src="previewRow.play_url" controls autoplay style="width:100%;border-radius:8px;background:#000"></video>
+        <div v-if="previewRow" class="mm-mt-8" style="font-size:12.5px;color:var(--text-3)">
+          {{ previewRow.category_name }} · {{ previewRow.duration_text }} · {{ previewRow.size_text }} ·
+          {{ previewRow.width }}×{{ previewRow.height }} · 播放 {{ previewRow.view_count }} 次
+        </div>
+      </el-dialog>
+
+    </admin-shell>
+  </div>
+
+  <script src="/static/vendor/vue.global.prod.js"></script>
+  <script src="/static/vendor/element-plus.min.js"></script>
+  <script src="/static/vendor/element-plus-zh-cn.min.js"></script>
+  <script src="/static/vendor/element-plus-icons.js"></script>
+  <script src="/static/js/config.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/ui.js"></script>
+  <script src="/static/js/request.js"></script>
+  <script src="/static/js/components-web.js"></script>
+  <script src="/static/js/admin-common.js"></script>
+  <script>
+    (function () {
+      var util = MM.util;
+
+      MM.bootAdmin({
+        data: function () {
+          return {
+            loading: true,
+            list: [],
+            total: 0,
+            pages: 1,
+            categories: [],
+            query: {
+              page: 1,
+              page_size: MM.config.PAGE_SIZE,
+              keyword: '',
+              category_id: null,
+              status: '',
+              order_by: 'created_at'
+            },
+            editVisible: false,
+            previewVisible: false,
+            current: null,
+            previewRow: null,
+            saving: false,
+            frameSeek: 3,
+            form: {
+              title: '', category_id: null, description: '', sort: 0, status: 1, cover_url: ''
+            }
+          };
+        },
+        mounted: function () {
+          this.loadCategories();
+          this.load();
+        },
+        methods: {
+          loadCategories: function () {
+            var self = this;
+            MM.http
+              .get('/admin/categories')
+              .then(function (list) {
+                self.categories = list || [];
+              })
+              .catch(function () {});
+          },
+          load: function () {
+            var self = this;
+            self.loading = true;
+            var q = {};
+            Object.keys(self.query).forEach(function (k) {
+              if (self.query[k] !== null && self.query[k] !== '') q[k] = self.query[k];
+            });
+            MM.http
+              .get('/admin/videos', q)
+              .then(function (data) {
+                self.list = data.list || [];
+                self.total = data.total || 0;
+                self.pages = data.pages || 1;
+                self.loading = false;
+              })
+              .catch(function (err) {
+                self.loading = false;
+                MM.http.toastError(err);
+              });
+          },
+          reload: function () {
+            this.query.page = 1;
+            this.load();
+          },
+          changePage: function (p) {
+            this.query.page = p;
+            this.load();
+          },
+          goUpload: function () {
+            window.location.href = '/admin/upload.html';
+          },
+
+          /* ---------------- 编辑 ---------------- */
+          openEdit: function (row) {
+            this.current = row;
+            this.form = {
+              title: row.title,
+              category_id: row.category_id,
+              description: row.description || '',
+              sort: row.sort || 0,
+              status: row.status,
+              cover_url: row.cover_url
+            };
+            this.editVisible = true;
+          },
+          save: function () {
+            var self = this;
+            if (!self.form.title) {
+              MM.ui.warning('标题不能为空');
+              return;
+            }
+            self.saving = true;
+            MM.http
+              .put('/admin/videos/' + self.current.id, {
+                title: self.form.title,
+                category_id: self.form.category_id,
+                description: self.form.description,
+                sort: self.form.sort,
+                status: self.form.status
+              })
+              .then(function () {
+                MM.vant.toast('已保存', 'success');
+                self.saving = false;
+                self.editVisible = false;
+                self.load();
+              })
+              .catch(function (err) {
+                self.saving = false;
+                MM.http.toastError(err);
+              });
+          },
+          pickCover: function () {
+            this.$refs.coverInput.click();
+          },
+          onCoverPick: function (e) {
+            var self = this;
+            var file = (e.target.files || [])[0];
+            if (!file) return;
+            var form = new FormData();
+            form.append('file', file);
+            form.append('kind', 'cover');
+            MM.http
+              .upload('/admin/upload/image', form)
+              .then(function (res) {
+                self.form.cover_url = res.url;
+                return MM.http.put('/admin/videos/' + self.current.id + '/cover', null, {
+                  params: { cover: res.path }
+                });
+              })
+              .then(function () {
+                MM.vant.toast('封面已更新', 'success');
+                self.load();
+                self.refreshCurrent();
+              })
+              .catch(function (err) {
+                MM.http.toastError(err);
+              });
+          },
+          coverFromFrame: function () {
+            var self = this;
+            MM.http
+              .post('/admin/videos/' + self.current.id + '/cover/from-frame', {
+                seek_seconds: Number(self.frameSeek) || null
+              })
+              .then(function (data) {
+                MM.vant.toast('已从关键帧重新生成封面', 'success');
+                self.form.cover_url = data.cover_url;
+                self.load();
+                self.refreshCurrent();
+              })
+              .catch(function (err) {
+                MM.http.toastError(err);
+              });
+          },
+          refreshMeta: function () {
+            var self = this;
+            MM.http
+              .post('/admin/videos/' + self.current.id + '/refresh-meta')
+              .then(function (data) {
+                MM.vant.toast('元信息已刷新', 'success');
+                Object.assign(self.current, data);
+                self.load();
+              })
+              .catch(function (err) {
+                MM.http.toastError(err);
+              });
+          },
+          refreshCurrent: function () {
+            var self = this;
+            MM.http
+              .get('/admin/videos/' + self.current.id)
+              .then(function (data) {
+                Object.assign(self.current, data);
+                self.form.cover_url = data.cover_url;
+              })
+              .catch(function () {});
+          },
+
+          /* ---------------- 更多操作 ---------------- */
+          onCommand: function (cmd, row) {
+            var self = this;
+            if (cmd === 'frame') {
+              MM.http
+                .post('/admin/videos/' + row.id + '/cover/from-frame', { seek_seconds: 3 })
+                .then(function () {
+                  MM.vant.toast('封面已重新生成', 'success');
+                  self.load();
+                })
+                .catch(function (err) {
+                  MM.http.toastError(err);
+                });
+            } else if (cmd === 'upload-cover') {
+              self.current = row;
+              self.$nextTick(function () {
+                self.pickCover();
+              });
+            } else if (cmd === 'refresh') {
+              MM.http
+                .post('/admin/videos/' + row.id + '/refresh-meta')
+                .then(function () {
+                  MM.vant.toast('已重新解析', 'success');
+                  self.load();
+                })
+                .catch(function (err) {
+                  MM.http.toastError(err);
+                });
+            } else if (cmd === 'toggle') {
+              MM.http
+                .put('/admin/videos/' + row.id, { status: row.status ? 0 : 1 })
+                .then(function () {
+                  MM.vant.toast(row.status ? '已下架' : '已上架');
+                  self.load();
+                })
+                .catch(function (err) {
+                  MM.http.toastError(err);
+                });
+            } else if (cmd === 'copy') {
+              MM.ui.copy(window.location.origin + row.play_url);
+            } else if (cmd === 'delete') {
+              self.confirmDelete(row);
+            }
+          },
+          confirmDelete: function (row) {
+            var self = this;
+            MM.ui
+              .confirm(
+                '将删除视频《' + row.title + '》的数据库记录，并清理其收藏与观看历史。\n' +
+                  '磁盘文件是否一并删除？',
+                { okText: '连文件一起删', cancelText: '仅删记录', danger: true, title: '删除视频' }
+              )
+              .then(function (withFile) {
+                MM.http
+                  .del('/admin/videos/' + row.id, { remove_file: withFile ? 'true' : 'false' })
+                  .then(function () {
+                    MM.vant.toast('已删除', 'success');
+                    self.load();
+                  })
+                  .catch(function (err) {
+                    MM.http.toastError(err);
+                  });
+              });
+          },
+          preview: function (row) {
+            var self = this;
+            MM.http
+              .get('/admin/videos/' + row.id)
+              .then(function (data) {
+                self.previewRow = data;
+                self.previewVisible = true;
+              })
+              .catch(function (err) {
+                MM.http.toastError(err);
+              });
+          },
+
+          /* ---------------- 展示辅助 ---------------- */
+          fmt: function (n) {
+            return util.formatCount(n);
+          },
+          dateText: function (t) {
+            return util.formatDate(t, true);
+          },
+          grad: function (t) {
+            return util.coverGradient(t);
+          },
+          initials: function (t) {
+            return util.coverInitials(t);
+          }
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

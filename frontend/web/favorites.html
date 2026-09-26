@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>我的收藏 - MediaManager</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('mm_theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        var h = document.documentElement;
+        h.setAttribute('data-theme', t);
+        h.classList.toggle('dark', t === 'dark');
+        h.classList.toggle('van-theme-dark', t === 'dark');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/vendor/vant.css" />
+  <link rel="stylesheet" href="/static/css/common.css" />
+  <link rel="stylesheet" href="/static/css/web.css" />
+</head>
+<body>
+  <div id="app" v-cloak>
+    <web-shell :user="user" active="favorites">
+      <div class="mm-section__head">
+        <h2 class="mm-section__title">我的收藏</h2>
+        <span class="mm-muted" style="font-size:12.5px" v-if="!loading">共 {{ total }} 个</span>
+      </div>
+
+      <v-skeleton v-if="loading" :count="8"></v-skeleton>
+
+      <template v-else>
+        <div class="mm-grid" v-if="videos.length">
+          <div v-for="v in videos" :key="v.video_id" style="position:relative">
+            <v-card :video="cardOf(v)"></v-card>
+            <button class="mm-btn mm-btn--sm" style="position:absolute;right:8px;top:8px;background:rgba(0,0,0,.6);color:#fff;border:none"
+                    @click.stop="unfavorite(v)">取消收藏</button>
+          </div>
+        </div>
+        <mm-empty v-else icon="⭐" text="还没有收藏任何视频">
+          <button class="mm-btn mm-btn--primary mm-mt-16" @click="goHome">去逛逛</button>
+        </mm-empty>
+        <mm-pager :page="page" :pages="pages" :total="total" @change="changePage"></mm-pager>
+      </template>
+    </web-shell>
+  </div>
+
+  <script src="/static/vendor/vue.global.prod.js"></script>
+  <script src="/static/vendor/vant.min.js"></script>
+  <script src="/static/js/config.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/ui.js"></script>
+  <script src="/static/js/request.js"></script>
+  <script src="/static/js/components-web.js"></script>
+  <script src="/static/js/layout-web.js"></script>
+  <script>
+    (function () {
+      var util = MM.util;
+
+      MM.bootWeb({
+        data: function () {
+          return {
+            user: MM.auth.getUser() || {},
+            videos: [],
+            page: 1,
+            pageSize: MM.config.PAGE_SIZE,
+            total: 0,
+            pages: 1,
+            loading: true
+          };
+        },
+        mounted: function () {
+          this.load();
+        },
+        methods: {
+          load: function () {
+            var self = this;
+            self.loading = true;
+            MM.http
+              .get('/client/favorites', { page: self.page, page_size: self.pageSize })
+              .then(function (data) {
+                self.videos = data.list || [];
+                self.total = data.total || 0;
+                self.pages = data.pages || 1;
+                self.loading = false;
+              })
+              .catch(function (err) {
+                self.loading = false;
+                MM.http.toastError(err);
+              });
+          },
+          /** 收藏接口返回的字段名与视频卡片略有差异，这里做一次适配 */
+          cardOf: function (f) {
+            return {
+              id: f.video_id,
+              title: f.title,
+              cover_url: f.cover_url,
+              duration_text: f.duration_text,
+              duration: f.duration,
+              view_count: f.view_count,
+              category_name: f.category_name
+            };
+          },
+          unfavorite: function (f) {
+            var self = this;
+            MM.http
+              .del('/client/favorites/' + f.video_id)
+              .then(function () {
+                MM.vant.toast('已取消收藏');
+                self.load();
+              })
+              .catch(function (err) {
+                MM.http.toastError(err);
+              });
+          },
+          changePage: function (p) {
+            this.page = p;
+            this.load();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          },
+          goHome: function () {
+            util.go(MM.config.PATHS.webHome);
+          }
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

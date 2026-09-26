@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>上传视频 - MediaManager 管理端</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('mm_theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        var h = document.documentElement;
+        h.setAttribute('data-theme', t);
+        h.classList.toggle('dark', t === 'dark');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/vendor/element-plus.css" />
+  <link rel="stylesheet" href="/static/vendor/element-plus-dark.css" />
+  <link rel="stylesheet" href="/static/css/common.css" />
+  <link rel="stylesheet" href="/static/css/web.css" />
+  <link rel="stylesheet" href="/static/css/admin.css" />
+</head>
+<body>
+  <div id="app" v-cloak>
+    <admin-shell title="上传视频" crumb="内容 / 上传视频" active="upload">
+
+      <!-- ===================== 上传区 ===================== -->
+      <div class="toolbar">
+        <span class="toolbar__title">📤 分片上传</span>
+        <div class="mm-row mm-wrap">
+          <span style="font-size:12.5px;color:var(--text-3)">默认分类</span>
+          <el-select v-model="defaultCategory" placeholder="选择分类" size="default" style="width:170px">
+            <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id"></el-option>
+          </el-select>
+          <span style="font-size:12.5px;color:var(--text-3)">并发分片</span>
+          <el-input-number v-model="concurrency" :min="1" :max="6" size="default" style="width:110px"></el-input-number>
+          <el-checkbox v-model="autoStart">添加后自动开始</el-checkbox>
+          <el-button @click="loadSessions">中断任务</el-button>
+          <el-button @click="cleanup">清理过期会话</el-button>
+        </div>
+      </div>
+
+      <div class="upload-drop" :class="{ 'upload-drop--over': dragOver }"
+           @click="pickFiles" @dragover.prevent="dragOver = true"
+           @dragleave.prevent="dragOver = false" @drop.prevent="onDrop">
+        <div class="upload-drop__icon">⬆</div>
+        <div class="upload-drop__title">点击选择视频文件，或将文件拖到此处</div>
+        <div class="upload-drop__sub">
+          支持多选 · 服务端分片大小 {{ chunkSizeText }} · 自动续传 / 秒传 / 关键帧封面
+          <br />支持格式：{{ allowExt.join('、') }}
+        </div>
+        <input ref="fileInput" type="file" multiple accept="video/*" style="display:none" @change="onPick" />
+      </div>
+
+      <!-- ===================== 任务列表 ===================== -->
+      <div v-if="tasks.length" class="mm-row mm-row--between mm-mt-16" style="margin-bottom:10px">
+        <div class="mm-row">
+          <span style="font-size:14px;font-weight:600">上传任务（{{ tasks.length }}）</span>
+          <span class="mm-muted" style="font-size:12.5px">
+            已完成 {{ statText.finished }} · 进行中 {{ statText.running }} · 失败 {{ statText.failed }}
+          </span>
+        </div>
+        <div class="mm-row">
+          <el-button size="small" @click="startAll" :disabled="!hasPending">全部开始</el-button>
+          <el-button size="small" @click="clearFinished">清除已完成</el-button>
+          <el-button size="small" type="danger" plain @click="clearAll">全部清空</el-button>
+        </div>
+      </div>
+
+      <div v-for="(t, idx) in tasks" :key="t.uid" class="upload-item">
+
+        <!-- 头部：文件名 + 状态 -->
+        <div class="upload-item__head">
+          <span class="mm-tag" :class="stageTagClass(t.state.stage)">{{ stageText(t.state.stage) }}</span>
+          <span class="upload-item__name mm-ellipsis">{{ t.file.name }}</span>
+          <span class="upload-item__size">{{ fmtSize(t.file.size) }}</span>
+          <span class="mm-muted" style="font-size:11.5px">{{ percentText(t) }}</span>
+        </div>
+
+        <!-- 阶段轨道 -->
+        <div class="stage-track">
+          <div v-for="(s, si) in stages" :key="s"
+               class="stage-node"
+               :class="{
+                 'stage-node--active': stageIndex(t.state.stage) === si && t.state.stage !== 'failed',
+                 'stage-node--done': stageIndex(t.state.stage) > si || t.state.stage === 'finished',
+                 'stage-node--failed': t.state.stage === 'failed' && stageIndex(t.state.stage) === si
+               }">{{ s }}</div>
+        </div>
+
+        <!-- 总进度 -->
+        <el-progress :percentage="Math.min(100, Number(t.state.percent) || 0)"
+                     :status="t.state.stage === 'failed' ? 'exception' : t.state.stage === 'finished' ? 'success' : ''"
+                     :stroke-width="10"></el-progress>
+
+        <!-- 明细 -->
+        <div class="upload-meta" style="margin-top:8px">
+          <span>整体进度：<b>{{ (Number(t.state.percent) || 0).toFixed(1) }}%</b></span>
+          <span>分片：<b>{{ t.state.uploadedChunks }}/{{ t.state.totalChunks || '—' }}</b></span>
+          <span v-if="t.state.chunkSize">单片：<b>{{ fmtSize(t.state.chunkSize) }}</b></span>
+          <span v-if="t.state.stage === 'merging'">
+            合并：<b>{{ fmtSize(t.state.mergedBytes) }} / {{ fmtSize(t.file.size) }}</b>
+          </span>
+          <span v-if="t.state.speed">速度：<b>{{ fmtSpeed(t.state.speed) }}</b></span>
+          <span v-if="t.state.videoId">视频ID：<b>#{{ t.state.videoId }}</b></span>
+          <span>{{ t.state.message }}</span>
+        </div>
+
+        <!-- 分片可视化 -->
+        <div class="chunk-grid" v-if="t.chunks.length">
+          <span v-for="c in t.chunks" :key="c.i"
+                class="chunk-cell"
+                :class="{ 'chunk-cell--done': c.done }"
+                :title="'分片 ' + c.i + (c.done ? ' 已上传' : ' 待上传')"></span>
+        </div>
+
+        <!-- 入库信息（开始前可编辑） -->
+        <div v-if="!t.started" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-top:12px">
+          <div class="mm-field">
+            <label class="mm-field__label">视频标题</label>
+            <input class="mm-input" v-model.trim="t.form.title" placeholder="留空则用文件名" />
+          </div>
+          <div class="mm-field">
+            <label class="mm-field__label">所属分类 *</label>
+            <select class="mm-select" v-model.number="t.form.categoryId">
+              <option :value="0">请选择分类</option>
+              <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+            </select>
+          </div>
+          <div class="mm-field">
+            <label class="mm-field__label">自定义封面（可选）</label>
+            <input class="mm-input" type="file" accept="image/*" @change="onCoverPick($event, t)" />
+          </div>
+        </div>
+        <div v-if="!t.started" class="mm-field" style="margin-top:10px">
+          <label class="mm-field__label">简介</label>
+          <textarea class="mm-textarea" v-model="t.form.description" placeholder="选填"></textarea>
+        </div>
+
+        <!-- 失败原因 -->
+        <el-alert v-if="t.state.stage === 'failed'" :title="t.state.error || '上传失败'"
+                  type="error" :closable="false" show-icon style="margin-top:10px"></el-alert>
+
+        <!-- 操作按钮 -->
+        <div class="mm-row mm-wrap" style="margin-top:12px">
+          <el-button v-if="!t.started" type="primary" size="small" @click="startOne(t)">开始上传</el-button>
+          <template v-if="t.started && !t.done">
+            <el-button v-if="!t.paused" size="small" @click="pauseOne(t)">暂停</el-button>
+            <el-button v-else size="small" type="primary" @click="resumeOne(t)">继续</el-button>
+            <el-button size="small" type="danger" plain @click="cancelOne(t)">取消</el-button>
+          </template>
+          <template v-if="t.state.stage === 'failed'">
+            <el-button v-if="!t.state.uploadId" size="small" type="primary" @click="startOne(t)">重新开始</el-button>
+            <el-button v-else size="small" type="primary" @click="resumeOne(t)">续传 / 重试</el-button>
+          </template>
+          <template v-if="t.done">
+            <el-button size="small" type="success" @click="goVideos">查看视频库</el-button>
+            <el-button size="small" @click="removeTask(idx)">移除</el-button>
+          </template>
+          <el-button v-if="!t.done && !t.started" size="small" plain @click="removeTask(idx)">移除</el-button>
+
+          <span class="mm-grow"></span>
+          <el-button v-if="t.state.stage === 'finished'" size="small" link @click="previewCover(t)">
+            <template v-if="t.state.videoId">查看封面/详情</template>
+          </el-button>
+        </div>
+      </div>
+
+      <!-- 中断任务（可续传） -->
+      <div class="mm-card mm-mt-16" v-if="sessions.length">
+        <div class="mm-card__head">
+          <span class="mm-card__title">♻ 未完成的上传会话（可续传）</span>
+          <span class="mm-muted" style="font-size:12px">共 {{ sessions.length }} 条</span>
+        </div>
+        <div class="mm-card__body" style="padding:8px 14px">
+          <div class="rank-row" v-for="s in sessions" :key="s.upload_id" style="display:flex;gap:10px;align-items:center;font-size:12.5px;border-bottom:1px dashed var(--border);padding:8px 0">
+            <span class="mm-tag mm-tag--muted">{{ s.stage_text }}</span>
+            <span class="mm-grow mm-ellipsis">{{ s.file_name }}</span>
+            <span class="mm-muted">{{ s.total_size_text }}</span>
+            <span class="mm-muted">{{ s.uploaded_chunks }}/{{ s.total_chunks }} 片</span>
+            <span class="mm-muted">{{ s.percent }}%</span>
+            <span class="mm-muted">{{ dateText(s.updated_at) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 说明 -->
+      <div class="mm-card mm-mt-16">
+        <div class="mm-card__head"><span class="mm-card__title">ℹ 分片上传流程说明</span></div>
+        <div class="mm-card__body" style="font-size:13px;color:var(--text-2);line-height:1.85">
+          <p style="margin:0 0 6px">
+            <b>① 分配</b>：前端先计算文件特征值请求服务端，服务端返回 upload_id、分片大小与总分片数；
+            若该文件此前已上传过则直接<b>秒传</b>。
+          </p>
+          <p style="margin:0 0 6px">
+            <b>② 分片上传</b>：按分片大小切片，多片并发上传（默认 3），失败自动重试；
+            刷新页面或断网后重新选择同一文件会<b>跳过已上传分片</b>，实现断点续传。
+          </p>
+          <p style="margin:0 0 6px">
+            <b>③ 合并</b>：全部分片到位后，服务端在后台按序拼接为一个完整文件，
+            合并进度按已写入字节实时上报（70% → 90% 区间）。
+          </p>
+          <p style="margin:0 0 6px">
+            <b>④ 解析与封面</b>：合并完成后解析时长/分辨率/码率，
+            并在第 3 秒处抽取关键帧生成封面（若你指定了自定义封面则优先使用）。
+          </p>
+          <p style="margin:0">
+            <b>进度通道</b>：优先使用 WebSocket 实时推送；连接不可用时自动降级为 1 秒轮询，
+            两者读取同一份服务端进度快照，因此刷新页面也不会丢失进度。
+          </p>
+        </div>
+      </div>
+
+    </admin-shell>
+  </div>
+
+  <script src="/static/vendor/vue.global.prod.js"></script>
+  <script src="/static/vendor/element-plus.min.js"></script>
+  <script src="/static/vendor/element-plus-zh-cn.min.js"></script>
+  <script src="/static/vendor/element-plus-icons.js"></script>
+  <script src="/static/js/config.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/ui.js"></script>
+  <script src="/static/js/request.js"></script>
+  <script src="/static/js/components-web.js"></script>
+  <script src="/static/js/admin-common.js"></script>
+  <script src="/static/js/uploader.js"></script>
+  <script>
+    (function () {
+      var util = MM.util;
+
+      MM.bootAdmin({
+        data: function () {
+          return {
+            categories: [],
+            defaultCategory: null,
+            concurrency: MM.config.UPLOAD.CONCURRENCY,
+            autoStart: true,
+            dragOver: false,
+            tasks: [],
+            sessions: [],
+            chunkSizeText: '5 MB',
+            allowExt: ['.mp4', '.mkv', '.mov', '.webm', '.avi', '.flv', '.ts', '.m4v', '.wmv'],
+            stages: ['已分配', '分片上传', '合并', '解析信息', '生成封面', '完成'],
+            uidSeed: 1
+          };
+        },
+        computed: {
+          hasPending: function () {
+            return this.tasks.some(function (t) {
+              return !t.started;
+            });
+          },
+          statText: function () {
+            var s = { finished: 0, running: 0, failed: 0 };
+            this.tasks.forEach(function (t) {
+              if (t.state.stage === 'finished') s.finished++;
+              else if (t.state.stage === 'failed') s.failed++;
+              else if (t.started) s.running++;
+            });
+            return s;
+          }
+        },
+        mounted: function () {
+          this.loadCategories();
+          this.loadSessions();
+        },
+        methods: {
+          /* ---------------- 基础数据 ---------------- */
+          loadCategories: function () {
+            var self = this;
+            MM.http
+              .get('/admin/categories')
+              .then(function (list) {
+                self.categories = list || [];
+                if (!self.defaultCategory && self.categories.length) {
+                  self.defaultCategory = self.categories[0].id;
+                }
+              })
+              .catch(function (err) {
+                MM.http.toastError(err);
+              });
+          },
+          loadSessions: function () {
+            var self = this;
+            MM.http
+              .get('/admin/upload/sessions/list', { limit: 30 })
+              .then(function (list) {
+                self.sessions = (list || []).filter(function (s) {
+                  return s.stage !== 'finished' && s.stage !== 'failed';
+                });
+              })
+              .catch(function () {});
+          },
+          cleanup: function () {
+            var self = this;
+            MM.http
+              .post('/admin/upload/sessions/cleanup')
+              .then(function (res) {
+                MM.vant.toast('已清理 ' + res.cleaned + ' 个过期会话');
+                self.loadSessions();
+              })
+              .catch(function (err) {
+                MM.http.toastError(err);
+              });
+          },
+
+          /* ---------------- 选择文件 ---------------- */
+          pickFiles: function () {
+            this.$refs.fileInput.click();
+          },
+          onPick: function (e) {
+            this.addFiles(e.target.files);
+            e.target.value = '';
+          },
+          onDrop: function (e) {
+            this.dragOver = false;
+            this.addFiles(e.dataTransfer.files);
+          },
+          addFiles: function (fileList) {
+            var self = this;
+            var files = Array.prototype.slice.call(fileList || []);
+            if (!files.length) return;
+            files.forEach(function (file) {
+              var ext = util.filenameExt(file.name);
+              if (self.allowExt.indexOf(ext) < 0) {
+                MM.ui.warning('跳过不支持的文件：' + file.name);
+                return;
+              }
+              var task = {
+                uid: 't' + self.uidSeed++,
+                file: file,
+                started: false,
+                paused: false,
+                done: false,
+                uploader: null,
+                chunks: [],
+                form: {
+                  title: file.name.replace(/\.[^.]+$/, ''),
+                  categoryId: self.defaultCategory || 0,
+                  description: '',
+                  cover: ''
+                },
+                state: {
+                  stage: 'pending',
+                  percent: 0,
+                  totalChunks: 0,
+                  chunkSize: 0,
+                  uploadedChunks: 0,
+                  mergedBytes: 0,
+                  speed: 0,
+                  message: '等待开始',
+                  error: '',
+                  videoId: 0,
+                  uploadedSet: {}
+                }
+              };
+              self.tasks.push(task);
+            });
+            if (self.autoStart) {
+              self.$nextTick(function () {
+                self.tasks.forEach(function (t) {
+                  if (!t.started) self.startOne(t);
+                });
+              });
+            }
+          },
+          onCoverPick: function (e, task) {
+            var file = (e.target.files || [])[0];
+            if (!file) return;
+            var form = new FormData();
+            form.append('file', file);
+            form.append('kind', 'cover');
+            MM.http
+              .upload('/admin/upload/image', form)
+              .then(function (res) {
+                task.form.cover = res.path;
+                MM.vant.toast('封面已上传', 'success');
+              })
+              .catch(function (err) {
+                MM.http.toastError(err);
+              });
+          },
+
+          /* ---------------- 上传控制 ---------------- */
+          startOne: function (task) {
+            var self = this;
+            if (task.started) return;
+            if (!task.form.categoryId) {
+              MM.ui.warning('请先为「' + task.file.name + '」选择分类');
+              return;
+            }
+            task.started = true;
+            task.paused = false;
+            task.chunks = self.buildChunks(task);
+
+            task.uploader = new MM.ChunkUploader(task.file, {
+              categoryId: task.form.categoryId,
+              title: task.form.title,
+              description: task.form.description,
+              cover: task.form.cover,
+              concurrency: Number(self.concurrency) || 3,
+              onProgress: function (state) {
+                Object.assign(task.state, state);
+                self.syncChunks(task);
+              },
+              onFinished: function () {
+                task.done = true;
+                MM.vant.toast('《' + task.form.title + '》上传完成', 'success');
+                self.loadSessions();
+              },
+              onError: function (err) {
+                MM.ui.error('《' + task.form.title + '》失败：' + ((err && err.message) || ''));
+              }
+            });
+            task.uploader.start().then(function () {
+              self.syncChunks(task);
+            });
+          },
+          startAll: function () {
+            var self = this;
+            this.tasks.forEach(function (t) {
+              if (!t.started) self.startOne(t);
+            });
+          },
+          pauseOne: function (task) {
+            if (task.uploader) task.uploader.pause();
+            task.paused = true;
+          },
+          resumeOne: function (task) {
+            var self = this;
+            task.paused = false;
+            if (!task.uploader || task.state.stage === 'failed') {
+              // 失败重试：保留 uploadId 即可续传；此处直接重新走一遍流程（会跳过已上传分片）
+              task.started = false;
+              self.$nextTick(function () {
+                self.startOne(task);
+              });
+              return;
+            }
+            task.uploader.resume();
+          },
+          cancelOne: function (task) {
+            var self = this;
+            MM.vant
+              .confirm('确定取消「' + task.file.name + '」的上传并清理已上传分片吗？')
+              .then(function () {
+                if (task.uploader) task.uploader.cancel();
+                task.started = true;
+                task.done = false;
+                task.state.stage = 'cancelled';
+                task.state.message = '已取消';
+                self.removeTask(self.tasks.indexOf(task));
+                self.loadSessions();
+              });
+          },
+          removeTask: function (idx) {
+            if (idx >= 0) this.tasks.splice(idx, 1);
+          },
+          clearFinished: function () {
+            this.tasks = this.tasks.filter(function (t) {
+              return !t.done;
+            });
+          },
+          clearAll: function () {
+            var self = this;
+            MM.vant.confirm('清空列表不会删除已上传的视频，确定继续？').then(function () {
+              self.tasks = [];
+            });
+          },
+          goVideos: function () {
+            window.location.href = '/admin/videos.html';
+          },
+          previewCover: function () {
+            window.location.href = '/admin/videos.html';
+          },
+
+          /* ---------------- 分片可视化 ---------------- */
+          buildChunks: function (task) {
+            var size = task.state.chunkSize || 5 * 1024 * 1024;
+            var total = Math.ceil(task.file.size / size);
+            // 分片过多时只渲染前 400 个格子，避免 DOM 过大
+            var limit = Math.min(total, 400);
+            var list = [];
+            for (var i = 0; i < limit; i++) list.push({ i: i, done: false });
+            return list;
+          },
+          syncChunks: function (task) {
+            if (!task.chunks.length) {
+              task.chunks = this.buildChunks(task);
+            }
+            var set = task.state.uploadedSet || {};
+            task.chunks.forEach(function (c) {
+              c.done = !!set[c.i] || task.state.stage === 'merging' || task.state.stage === 'finished';
+            });
+          },
+
+          /* ---------------- 展示辅助 ---------------- */
+          stageIndex: function (stage) {
+            return { init: 0, hashing: 0, uploading: 1, merging: 2, probing: 3, covering: 4, finished: 5, failed: 1 }[stage] !== undefined
+              ? { init: 0, hashing: 0, uploading: 1, merging: 2, probing: 3, covering: 4, finished: 5, failed: 1 }[stage]
+              : 0;
+          },
+          stageText: function (stage) {
+            return (
+              {
+                pending: '等待开始',
+                hashing: '计算特征',
+                init: '分配任务',
+                uploading: '分片上传中',
+                merging: '合并中',
+                probing: '解析信息',
+                covering: '生成封面',
+                finished: '已完成',
+                failed: '失败',
+                cancelled: '已取消'
+              }[stage] || stage
+            );
+          },
+          stageTagClass: function (stage) {
+            if (stage === 'finished') return 'mm-tag--success';
+            if (stage === 'failed') return 'mm-tag--danger';
+            if (stage === 'merging' || stage === 'probing' || stage === 'covering') return 'mm-tag--warning';
+            return '';
+          },
+          percentText: function (task) {
+            if (task.state.stage === 'finished') return '已完成';
+            if (task.state.stage === 'failed') return '已中断';
+            if (!task.state.totalChunks) return '待开始';
+            return task.state.uploadedChunks + '/' + task.state.totalChunks + ' 片';
+          },
+          fmtSize: function (b) {
+            return util.formatSize(b);
+          },
+          fmtSpeed: function (s) {
+            return util.formatSpeed(s);
+          },
+          dateText: function (t) {
+            return util.formatDate(t, true);
+          }
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>数据概览 - MediaManager 管理端</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('mm_theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        var h = document.documentElement;
+        h.setAttribute('data-theme', t);
+        h.classList.toggle('dark', t === 'dark');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/vendor/element-plus.css" />
+  <link rel="stylesheet" href="/static/vendor/element-plus-dark.css" />
+  <link rel="stylesheet" href="/static/css/common.css" />
+  <link rel="stylesheet" href="/static/css/web.css" />
+  <link rel="stylesheet" href="/static/css/admin.css" />
+  <style>
+    .bar-chart {
+      display: flex;
+      align-items: flex-end;
+      gap: 6px;
+      height: 168px;
+      padding: 8px 4px 0;
+    }
+    .bar-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 4px;
+      height: 100%;
+      min-width: 0;
+    }
+    .bar-col__bar {
+      width: 100%;
+      max-width: 34px;
+      border-radius: 4px 4px 0 0;
+      background: linear-gradient(180deg, var(--primary), rgba(59,130,246,.35));
+      min-height: 3px;
+      transition: height .3s ease;
+    }
+    .bar-col__label {
+      font-size: 10.5px;
+      color: var(--text-3);
+      white-space: nowrap;
+      transform: scale(.92);
+    }
+    .rank-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 4px;
+      border-bottom: 1px dashed var(--border);
+      font-size: 13px;
+    }
+    .rank-row:last-child { border-bottom: none; }
+    .rank-no {
+      width: 20px; height: 20px; border-radius: 5px; flex: none;
+      display: grid; place-items: center; font-size: 11px; font-weight: 700;
+      background: var(--panel-2); color: var(--text-3);
+    }
+    .rank-row:nth-child(1) .rank-no { background: var(--danger); color: #fff; }
+    .rank-row:nth-child(2) .rank-no { background: var(--warning); color: #fff; }
+    .rank-row:nth-child(3) .rank-no { background: var(--primary); color: #fff; }
+  </style>
+</head>
+<body>
+  <div id="app" v-cloak>
+    <admin-shell title="数据概览" crumb="首页 / 概览" active="index">
+
+      <div v-if="loading" style="padding:40px;text-align:center">
+        <el-skeleton :rows="8" animated></el-skeleton>
+      </div>
+
+      <template v-else>
+        <!-- 核心指标 -->
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="stat-card__label">🎬 视频总数</div>
+            <div class="stat-card__value">{{ d.video.total }}<span class="stat-card__unit">个</span></div>
+            <div class="stat-card__foot">上架 {{ d.video.online }} · 下架 {{ d.video.offline }}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__label">👥 用户总数</div>
+            <div class="stat-card__value">{{ d.user.total }}<span class="stat-card__unit">人</span></div>
+            <div class="stat-card__foot">管理员 {{ d.user.admin }} · 近 7 天活跃 {{ d.user.active_7d }}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__label">👁 播放总次数</div>
+            <div class="stat-card__value">{{ fmt(d.play.total) }}<span class="stat-card__unit">次</span></div>
+            <div class="stat-card__foot">今日新增 {{ d.play.today }} 次</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__label">⭐ 收藏数</div>
+            <div class="stat-card__value">{{ fmt(d.play.favorite) }}<span class="stat-card__unit">次</span></div>
+            <div class="stat-card__foot">观看记录 {{ d.play.history }} 条</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__label">⏱ 视频总时长</div>
+            <div class="stat-card__value" style="font-size:20px">{{ d.video.duration_text }}</div>
+            <div class="stat-card__foot">占用磁盘 {{ d.video.size_text }}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__label">🗂 分类数量</div>
+            <div class="stat-card__value">{{ d.category.total }}<span class="stat-card__unit">个</span></div>
+            <div class="stat-card__foot">上传任务 进行中 {{ d.upload.running }}</div>
+          </div>
+        </div>
+
+        <!-- 趋势 + 排行 -->
+        <div style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px" class="mm-wrap">
+          <div class="mm-card">
+            <div class="mm-card__head">
+              <span class="mm-card__title">📈 近 {{ trend.days }} 天有效播放趋势</span>
+              <el-radio-group v-model="trendDays" size="small" @change="loadTrend">
+                <el-radio-button :value="7">7 天</el-radio-button>
+                <el-radio-button :value="14">14 天</el-radio-button>
+                <el-radio-button :value="30">30 天</el-radio-button>
+              </el-radio-group>
+            </div>
+            <div class="mm-card__body">
+              <div class="bar-chart" v-if="trend.items.length">
+                <div class="bar-col" v-for="it in trend.items" :key="it.day" :title="it.day + '：' + it.views + ' 次 / ' + it.users + ' 人'">
+                  <span style="font-size:10.5px;color:var(--text-2)">{{ it.views || '' }}</span>
+                  <div class="bar-col__bar" :style="{ height: barHeight(it.views) }"></div>
+                  <span class="bar-col__label">{{ it.day.slice(5) }}</span>
+                </div>
+              </div>
+              <el-empty v-else description="暂无播放数据（观看视频超过 10 秒后开始统计）" :image-size="70"></el-empty>
+            </div>
+          </div>
+
+          <div class="mm-card">
+            <div class="mm-card__head">
+              <span class="mm-card__title">🔥 播放排行榜</span>
+            </div>
+            <div class="mm-card__body" style="padding:6px 14px 12px">
+              <div class="rank-row" v-for="(v, i) in top" :key="v.id">
+                <span class="rank-no">{{ i + 1 }}</span>
+                <span class="mm-grow mm-ellipsis">{{ v.title }}</span>
+                <span class="mm-tag mm-tag--muted">{{ v.category_name || '未分类' }}</span>
+                <span class="mm-mono" style="font-size:12.5px;color:var(--text-2)">{{ fmt(v.view_count) }}</span>
+              </div>
+              <el-empty v-if="!top.length" description="暂无数据" :image-size="60"></el-empty>
+            </div>
+          </div>
+        </div>
+
+        <!-- 分类分布 + 运行环境 -->
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:16px;margin-top:16px" class="mm-wrap">
+          <div class="mm-card">
+            <div class="mm-card__head"><span class="mm-card__title">🗂 分类内容分布</span></div>
+            <div class="mm-card__body">
+              <div v-for="c in d.category.items" :key="c.category_id" style="margin-bottom:12px">
+                <div class="mm-row mm-row--between" style="font-size:12.5px;margin-bottom:4px">
+                  <span>{{ c.category_name }}</span>
+                  <span class="mm-muted">{{ c.total }} 个</span>
+                </div>
+                <el-progress :percentage="catPercent(c.total)" :stroke-width="8" :show-text="false"></el-progress>
+              </div>
+              <el-empty v-if="!d.category.items.length" description="暂无分类" :image-size="60"></el-empty>
+            </div>
+          </div>
+
+          <div class="mm-card">
+            <div class="mm-card__head"><span class="mm-card__title">⚙ 运行环境</span></div>
+            <div class="mm-card__body">
+              <el-descriptions :column="2" border size="small">
+                <el-descriptions-item label="媒体处理后端">
+                  <el-tag v-if="d.system.media_backend.av" type="success" size="small">PyAV</el-tag>
+                  <el-tag v-if="d.system.media_backend.cv2" type="success" size="small" style="margin-left:4px">OpenCV</el-tag>
+                  <el-tag type="info" size="small" style="margin-left:4px">内置MP4解析</el-tag>
+                  <div style="font-size:11.5px;color:var(--text-3);margin-top:4px">
+                    Pillow: {{ d.system.media_backend.PIL ? '已装' : '未装' }} ·
+                    numpy: {{ d.system.media_backend.numpy ? '已装' : '未装' }}
+                  </div>
+                </el-descriptions-item>
+                <el-descriptions-item label="分片大小">{{ fmtSize(d.system.chunk_size) }}</el-descriptions-item>
+                <el-descriptions-item label="存储目录" :span="2">
+                  <span class="mm-mono" style="font-size:11.5px">{{ d.system.storage_root }}</span>
+                </el-descriptions-item>
+                <el-descriptions-item label="数据库连接池">
+                  空闲 {{ d.system.pool.idle }} / 上限 {{ d.system.pool.max }}
+                </el-descriptions-item>
+                <el-descriptions-item label="上传任务">
+                  总 {{ d.upload.total }} · 完成 {{ d.upload.finished }} · 失败 {{ d.upload.failed }}
+                </el-descriptions-item>
+              </el-descriptions>
+            </div>
+          </div>
+        </div>
+
+        <!-- 快捷入口 -->
+        <div class="mm-card mm-mt-16">
+          <div class="mm-card__head"><span class="mm-card__title">🚀 快捷操作</span></div>
+          <div class="mm-card__body mm-row mm-wrap">
+            <el-button type="primary" @click="go('/admin/upload.html')">上传视频</el-button>
+            <el-button @click="go('/admin/videos.html')">视频管理</el-button>
+            <el-button @click="go('/admin/categories.html')">分类管理</el-button>
+            <el-button @click="go('/admin/users.html')">用户与权限</el-button>
+            <el-button @click="go('/admin/settings.html')">系统信息</el-button>
+          </div>
+        </div>
+      </template>
+
+    </admin-shell>
+  </div>
+
+  <script src="/static/vendor/vue.global.prod.js"></script>
+  <script src="/static/vendor/element-plus.min.js"></script>
+  <script src="/static/vendor/element-plus-zh-cn.min.js"></script>
+  <script src="/static/vendor/element-plus-icons.js"></script>
+  <script src="/static/js/config.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/ui.js"></script>
+  <script src="/static/js/request.js"></script>
+  <script src="/static/js/components-web.js"></script>
+  <script src="/static/js/admin-common.js"></script>
+  <script>
+    (function () {
+      var util = MM.util;
+
+      MM.bootAdmin({
+        data: function () {
+          return {
+            loading: true,
+            d: {
+              video: {}, user: {}, category: { items: [] }, play: {}, upload: {}, system: { media_backend: {}, pool: {} }
+            },
+            trend: { days: 14, items: [] },
+            trendDays: 14,
+            top: []
+          };
+        },
+        mounted: function () {
+          this.load();
+        },
+        methods: {
+          load: function () {
+            var self = this;
+            self.loading = true;
+            Promise.all([
+              MM.http.get('/admin/stats/overview'),
+              MM.http.get('/admin/stats/trend', { days: self.trendDays }),
+              MM.http.get('/admin/stats/top-videos', { limit: 10 })
+            ])
+              .then(function (res) {
+                self.d = res[0];
+                self.trend = res[1];
+                self.top = res[2];
+                self.loading = false;
+              })
+              .catch(function (err) {
+                self.loading = false;
+                MM.http.toastError(err);
+              });
+          },
+          loadTrend: function () {
+            var self = this;
+            MM.http
+              .get('/admin/stats/trend', { days: self.trendDays })
+              .then(function (data) {
+                self.trend = data;
+              })
+              .catch(function (err) {
+                MM.http.toastError(err);
+              });
+          },
+          barHeight: function (views) {
+            var max = 0;
+            this.trend.items.forEach(function (i) {
+              if (i.views > max) max = i.views;
+            });
+            if (!max) return '3px';
+            return Math.max(4, Math.round((views / max) * 120)) + 'px';
+          },
+          catPercent: function (total) {
+            var sum = 0;
+            (this.d.category.items || []).forEach(function (i) {
+              sum += i.total;
+            });
+            return sum ? Math.round((total / sum) * 100) : 0;
+          },
+          fmt: function (n) {
+            return util.formatCount(n);
+          },
+          fmtSize: function (b) {
+            return util.formatSize(b);
+          },
+          go: function (p) {
+            window.location.href = p;
+          }
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

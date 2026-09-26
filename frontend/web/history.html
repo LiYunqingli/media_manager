@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>观看历史 - MediaManager</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('mm_theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        var h = document.documentElement;
+        h.setAttribute('data-theme', t);
+        h.classList.toggle('dark', t === 'dark');
+        h.classList.toggle('van-theme-dark', t === 'dark');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/vendor/vant.css" />
+  <link rel="stylesheet" href="/static/css/common.css" />
+  <link rel="stylesheet" href="/static/css/web.css" />
+</head>
+<body>
+  <div id="app" v-cloak>
+    <web-shell :user="user" active="history">
+      <div class="mm-section__head">
+        <h2 class="mm-section__title">观看历史</h2>
+        <div class="mm-row">
+          <span class="mm-muted" style="font-size:12.5px" v-if="!loading">共 {{ total }} 条</span>
+          <button class="mm-btn mm-btn--sm" v-if="total" @click="clearAll">清空历史</button>
+        </div>
+      </div>
+
+      <div v-if="loading" class="mm-col">
+        <div class="mm-skeleton" v-for="i in 6" :key="i" style="height:82px"></div>
+      </div>
+
+      <template v-else>
+        <div class="mm-card" v-if="items.length" style="padding:8px">
+          <div class="h-item" v-for="h in items" :key="h.video_id"
+               style="display:flex;gap:12px;padding:10px;border-radius:8px;cursor:pointer"
+               @mouseenter="e => e.currentTarget.style.background = 'var(--panel-hover)'"
+               @mouseleave="e => e.currentTarget.style.background = ''"
+               @click="open(h)">
+            <div style="width:140px;aspect-ratio:16/9;border-radius:6px;overflow:hidden;background:var(--panel-2);flex:none;position:relative">
+              <img v-if="h.cover_url" :src="h.cover_url" style="width:100%;height:100%;object-fit:cover" />
+              <div v-else class="v-card__placeholder" :style="{ background: grad(h.title) }">{{ initials(h.title) }}</div>
+              <div class="v-card__progress"><span :style="{ width: Math.min(h.progress, 100) + '%' }"></span></div>
+            </div>
+            <div class="mm-grow">
+              <div style="font-size:14px;font-weight:500;margin-bottom:4px" class="mm-clamp-2">{{ h.title }}</div>
+              <div class="mm-row mm-wrap" style="gap:12px;font-size:12.5px;color:var(--text-3)">
+                <span class="mm-tag mm-tag--muted">{{ h.category_name || '未分类' }}</span>
+                <span>看到 {{ h.last_position_text }} / {{ h.duration_text }}</span>
+                <span>进度 {{ h.progress }}%</span>
+                <span v-if="h.finished" class="mm-tag mm-tag--success">已看完</span>
+                <span>累计 {{ watchText(h.watch_seconds) }}</span>
+                <span>{{ fromNow(h.watched_at) }}</span>
+              </div>
+            </div>
+            <div class="mm-row" style="align-items:center">
+              <button class="mm-btn mm-btn--sm mm-btn--primary" @click.stop="open(h)">
+                {{ h.progress > 2 && !h.finished ? '继续观看' : '重新观看' }}
+              </button>
+              <button class="mm-btn mm-btn--sm" @click.stop="removeOne(h)">删除</button>
+            </div>
+          </div>
+        </div>
+
+        <mm-empty v-else icon="🕘" text="暂无观看记录">
+          <button class="mm-btn mm-btn--primary mm-mt-16" @click="goHome">去逛逛</button>
+        </mm-empty>
+
+        <mm-pager :page="page" :pages="pages" :total="total" @change="changePage"></mm-pager>
+      </template>
+    </web-shell>
+  </div>
+
+  <script src="/static/vendor/vue.global.prod.js"></script>
+  <script src="/static/vendor/vant.min.js"></script>
+  <script src="/static/js/config.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/ui.js"></script>
+  <script src="/static/js/request.js"></script>
+  <script src="/static/js/components-web.js"></script>
+  <script src="/static/js/layout-web.js"></script>
+  <script>
+    (function () {
+      var util = MM.util;
+
+      MM.bootWeb({
+        data: function () {
+          return {
+            user: MM.auth.getUser() || {},
+            items: [],
+            page: 1,
+            pageSize: MM.config.PAGE_SIZE,
+            total: 0,
+            pages: 1,
+            loading: true
+          };
+        },
+        mounted: function () {
+          this.load();
+        },
+        methods: {
+          load: function () {
+            var self = this;
+            self.loading = true;
+            MM.http
+              .get('/client/history', { page: self.page, page_size: self.pageSize })
+              .then(function (data) {
+                self.items = data.list || [];
+                self.total = data.total || 0;
+                self.pages = data.pages || 1;
+                self.loading = false;
+              })
+              .catch(function (err) {
+                self.loading = false;
+                MM.http.toastError(err);
+              });
+          },
+          open: function (h) {
+            util.go(MM.config.PATHS.webDetail, { id: h.video_id, resume: 1 });
+          },
+          removeOne: function (h) {
+            var self = this;
+            MM.http
+              .del('/client/history/' + h.video_id)
+              .then(function () {
+                MM.vant.toast('已删除');
+                self.load();
+              })
+              .catch(function (err) {
+                MM.http.toastError(err);
+              });
+          },
+          clearAll: function () {
+            var self = this;
+            MM.vant.confirm('确定清空全部观看历史吗？该操作不可恢复。').then(function () {
+              MM.http
+                .del('/client/history')
+                .then(function () {
+                  MM.vant.toast('已清空');
+                  self.page = 1;
+                  self.load();
+                })
+                .catch(function (err) {
+                  MM.http.toastError(err);
+                });
+            });
+          },
+          changePage: function (p) {
+            this.page = p;
+            this.load();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          },
+          goHome: function () {
+            util.go(MM.config.PATHS.webHome);
+          },
+          grad: function (t) {
+            return util.coverGradient(t);
+          },
+          initials: function (t) {
+            return util.coverInitials(t);
+          },
+          fromNow: function (t) {
+            return util.fromNow(t);
+          },
+          watchText: function (sec) {
+            var s = Math.round(Number(sec) || 0);
+            if (s < 60) return s + ' 秒';
+            return util.formatDurationCn(s);
+          }
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

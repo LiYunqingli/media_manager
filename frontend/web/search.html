@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>搜索 - MediaManager</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('mm_theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        var h = document.documentElement;
+        h.setAttribute('data-theme', t);
+        h.classList.toggle('dark', t === 'dark');
+        h.classList.toggle('van-theme-dark', t === 'dark');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/vendor/vant.css" />
+  <link rel="stylesheet" href="/static/css/common.css" />
+  <link rel="stylesheet" href="/static/css/web.css" />
+</head>
+<body>
+  <div id="app" v-cloak>
+    <web-shell :user="user" :keyword="keyword" @search="onSearch">
+      <div class="mm-section__head">
+        <h2 class="mm-section__title" v-if="keyword">
+          搜索「{{ keyword }}」
+        </h2>
+        <h2 class="mm-section__title" v-else>搜索视频</h2>
+        <span class="mm-muted" style="font-size:12.5px" v-if="!loading && keyword">
+          共找到 {{ total }} 个结果
+        </span>
+      </div>
+
+      <v-skeleton v-if="loading" :count="8"></v-skeleton>
+
+      <template v-else>
+        <div class="mm-grid" v-if="videos.length">
+          <v-card v-for="v in videos" :key="v.id" :video="v"></v-card>
+        </div>
+        <mm-empty v-else icon="🔍" :text="keyword ? '没有找到相关视频，换个关键词试试' : '请输入关键词开始搜索'"></mm-empty>
+        <mm-pager :page="page" :pages="pages" :total="total" @change="changePage"></mm-pager>
+      </template>
+    </web-shell>
+  </div>
+
+  <script src="/static/vendor/vue.global.prod.js"></script>
+  <script src="/static/vendor/vant.min.js"></script>
+  <script src="/static/js/config.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/ui.js"></script>
+  <script src="/static/js/request.js"></script>
+  <script src="/static/js/components-web.js"></script>
+  <script src="/static/js/layout-web.js"></script>
+  <script>
+    (function () {
+      var util = MM.util;
+
+      MM.bootWeb({
+        data: function () {
+          return {
+            user: MM.auth.getUser() || {},
+            keyword: util.query('keyword', ''),
+            videos: [],
+            page: 1,
+            pageSize: MM.config.PAGE_SIZE,
+            total: 0,
+            pages: 1,
+            loading: true
+          };
+        },
+        mounted: function () {
+          this.search();
+        },
+        methods: {
+          onSearch: function (kw) {
+            // 顶栏搜索框提交：同一页面内重新检索，并同步地址栏便于分享
+            this.keyword = kw;
+            this.page = 1;
+            window.history.replaceState(null, '', util.buildUrl('/search.html', { keyword: kw }));
+            this.search();
+          },
+          search: function () {
+            var self = this;
+            if (!self.keyword) {
+              self.videos = [];
+              self.loading = false;
+              return;
+            }
+            self.loading = true;
+            MM.http
+              .get('/client/search', {
+                keyword: self.keyword,
+                page: self.page,
+                page_size: self.pageSize
+              })
+              .then(function (data) {
+                self.videos = data.list || [];
+                self.total = data.total || 0;
+                self.pages = data.pages || 1;
+                self.loading = false;
+                document.title = '搜索：' + self.keyword + ' - MediaManager';
+              })
+              .catch(function (err) {
+                self.loading = false;
+                MM.http.toastError(err);
+              });
+          },
+          changePage: function (p) {
+            this.page = p;
+            this.search();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
