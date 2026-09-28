@@ -262,3 +262,7 @@ Thumbs.db
 sql/backup/
 *.sql.bak
 *.dump
+
+# 启动脚本
+
+/backend/start.cmd
