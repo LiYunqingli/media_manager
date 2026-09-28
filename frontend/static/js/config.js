@@ -25,6 +25,7 @@
     PATHS: {
       webLogin: '/login.html',
       webHome: '/index.html',
+      webCategories: '/categories.html',
       webCategory: '/category.html',
       webDetail: '/detail.html',
       webPlay: '/play.html',

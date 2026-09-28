@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>全部分类 - MediaManager</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('mm_theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        var h = document.documentElement;
+        h.setAttribute('data-theme', t);
+        h.classList.toggle('dark', t === 'dark');
+        h.classList.toggle('van-theme-dark', t === 'dark');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/vendor/vant.css" />
+  <link rel="stylesheet" href="/static/css/common.css" />
+  <link rel="stylesheet" href="/static/css/web.css" />
+</head>
+<body>
+  <div id="app" v-cloak>
+    <web-shell :user="user" active="categories">
+
+      <div class="page-head">
+        <h2 class="mm-section__title">
+          <mm-icon name="grid" :size="16"></mm-icon>全部分类
+        </h2>
+        <span class="mm-muted" style="font-size:12.5px" v-if="!loading">共 {{ categories.length }} 个分类</span>
+      </div>
+
+      <v-skeleton v-if="loading" :count="8"></v-skeleton>
+
+      <template v-else>
+        <div class="cat-toolbar">
+          <div class="web-search cat-toolbar__filter">
+            <input v-model="filter" placeholder="筛选分类…" aria-label="筛选分类" />
+            <span class="web-search__btn" v-if="filter" @click="filter = ''" title="清除">
+              <mm-icon name="close" :size="14"></mm-icon>
+            </span>
+            <span class="web-search__btn" v-else><mm-icon name="search" :size="15"></mm-icon></span>
+          </div>
+          <span class="cat-toolbar__hint">按名称或简介筛选，点击卡片进入该分类</span>
+        </div>
+
+        <div class="mm-grid mm-grid--cat" v-if="shown.length">
+          <div class="cat-card" v-for="c in shown" :key="c.id" @click="goCategory(c.id)">
+            <div class="cat-card__cover">
+              <img v-if="c.cover_url" :src="c.cover_url" :alt="c.name" loading="lazy" @error="onImgError" />
+              <!-- 无封面时只铺渐变底，不叠首字母：下方标题已有名称，重复反而显脏 -->
+              <div v-else class="cat-card__fallback" :style="{ background: grad(c.name) }"></div>
+              <div class="cat-card__mask"></div>
+              <div class="cat-card__overlay">
+                <span class="cat-card__count">{{ c.video_count }} 个视频</span>
+              </div>
+            </div>
+            <div class="cat-card__body">
+              <div class="cat-card__name">{{ c.name }}</div>
+              <div class="cat-card__desc">{{ c.description || '暂无描述' }}</div>
+            </div>
+          </div>
+        </div>
+
+        <mm-empty v-else icon="grid" :text="filter ? '没有匹配的分类' : '暂无可浏览的分类'"></mm-empty>
+      </template>
+
+    </web-shell>
+  </div>
+
+  <script src="/static/vendor/vue.global.prod.js"></script>
+  <script src="/static/vendor/vant.min.js"></script>
+  <script src="/static/js/config.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/icons.js"></script>
+  <script src="/static/js/ui.js"></script>
+  <script src="/static/js/request.js"></script>
+  <script src="/static/js/components-web.js"></script>
+  <script src="/static/js/layout-web.js"></script>
+  <script>
+    (function () {
+      var util = MM.util;
+
+      MM.bootWeb({
+        data: function () {
+          return {
+            user: MM.auth.getUser() || {},
+            categories: [],
+            filter: '',
+            loading: true
+          };
+        },
+        computed: {
+          shown: function () {
+            var kw = (this.filter || '').trim().toLowerCase();
+            if (!kw) return this.categories;
+            return this.categories.filter(function (c) {
+              return (
+                (c.name || '').toLowerCase().indexOf(kw) >= 0 ||
+                (c.description || '').toLowerCase().indexOf(kw) >= 0
+              );
+            });
+          }
+        },
+        mounted: function () {
+          var self = this;
+          MM.http
+            .get('/client/categories')
+            .then(function (list) {
+              self.categories = list || [];
+              self.loading = false;
+            })
+            .catch(function (err) {
+              self.loading = false;
+              MM.http.toastError(err);
+            });
+        },
+        methods: {
+          goCategory: function (id) {
+            util.go(MM.config.PATHS.webCategory, { id: id });
+          },
+          grad: function (t) {
+            return util.coverGradient(t);
+          },
+          initials: function (t) {
+            return util.coverInitials(t);
+          },
+          onImgError: function (e) {
+            e.target.style.display = 'none';
+          }
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

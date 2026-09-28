@@ -26,33 +26,52 @@
       <div class="detail-layout">
 
         <div>
-          <!-- 分类头 -->
-          <div class="mm-card mm-mb-16" v-if="category">
-            <div class="mm-card__body category-head">
-              <div class="category-head__cover">
-                <img v-if="category.cover_url" :src="category.cover_url" :alt="category.name" />
-                <div v-else class="v-card__placeholder" :style="{ background: grad(category.name) }">
-                  {{ initials(category.name) }}
-                </div>
+          <!-- 分类 banner -->
+          <section class="cat-hero" :class="{ 'cat-hero--plain': !category.cover_url }" v-if="category">
+            <div class="cat-hero__bg">
+              <img v-if="category.cover_url" :src="category.cover_url" :alt="category.name" />
+              <div v-else class="cat-hero__fallback" :style="{ background: grad(category.name) }"></div>
+            </div>
+            <div class="cat-hero__mask"></div>
+            <div class="cat-hero__content">
+              <!-- 有封面才显示方形缩略图；无封面时背景渐变已表达同一信息，再放方块是冗余 -->
+              <div class="cat-hero__avatar" v-if="category.cover_url">
+                <img :src="category.cover_url" :alt="category.name" />
               </div>
-              <div class="mm-grow">
-                <h1 class="category-head__name">{{ category.name }}</h1>
-                <p class="category-head__desc">
-                  {{ category.description || '该分类暂无描述' }}
-                </p>
-                <div class="category-head__stat">
-                  <span>共 {{ total }} 个视频</span>
-                  <span>第 {{ page }} / {{ pages }} 页</span>
+              <div class="cat-hero__text">
+                <div class="cat-hero__crumb" @click="goCategories">
+                  <mm-icon name="grid" :size="13"></mm-icon>全部分类
                 </div>
-              </div>
-              <div class="mm-row">
-                <select class="mm-select mm-w-auto" v-model="orderBy" @change="reload" aria-label="排序方式">
-                  <option value="created_at">最新发布</option>
-                  <option value="view_count">最多播放</option>
-                  <option value="duration">时长优先</option>
-                </select>
+                <h1 class="cat-hero__name">{{ category.name }}</h1>
+                <p class="cat-hero__desc">{{ category.description || '该分类暂无描述' }}</p>
+                <div class="cat-hero__stats">
+                  <span class="cat-hero__stat">
+                    <mm-icon name="film" :size="13"></mm-icon>{{ total }} 个视频
+                  </span>
+                  <span class="cat-hero__stat" v-if="pages > 1">
+                    <mm-icon name="document" :size="13"></mm-icon>第 {{ page }} / {{ pages }} 页
+                  </span>
+                </div>
               </div>
             </div>
+          </section>
+
+          <!-- 工具条：分类快捷切换（窄屏变横向滚动标签条） -->
+          <div class="cat-bar">
+            <div class="cat-bar__tabs no-scrollbar">
+              <span class="cat-bar__tab cat-bar__tab--all" @click="goCategories">全部</span>
+              <span class="cat-bar__tab" v-for="c in allCategories" :key="'t' + c.id"
+                    :class="{ 'cat-bar__tab--active': c.id === categoryId }"
+                    @click="goCategory(c.id)">{{ c.name }}</span>
+            </div>
+            <label class="cat-bar__sort">
+              <mm-icon name="trend" :size="13"></mm-icon>
+              <select v-model="orderBy" @change="reload" aria-label="排序方式">
+                <option value="created_at">最新发布</option>
+                <option value="view_count">最多播放</option>
+                <option value="duration">时长优先</option>
+              </select>
+            </label>
           </div>
 
           <v-skeleton v-if="loading" :count="8"></v-skeleton>
@@ -61,24 +80,30 @@
             <div class="mm-grid" v-if="videos.length">
               <v-card v-for="v in videos" :key="v.id" :video="v"></v-card>
             </div>
-            <mm-empty v-else icon="folder" text="该分类下暂时没有视频"></mm-empty>
+            <mm-empty v-else icon="folder" text="该分类下暂时没有视频">
+              <span class="mm-btn mm-btn--sm" @click="goCategories">去其他分类看看</span>
+            </mm-empty>
             <mm-pager :page="page" :pages="pages" :total="total" @change="changePage"></mm-pager>
           </template>
         </div>
 
-        <!-- 右侧：其他分类推荐 -->
+        <!-- 右侧：其他分类 + 全站热门 -->
         <aside class="related-panel">
-          <div class="mm-card">
+          <div class="mm-card" v-if="otherCategories.length">
             <div class="mm-card__head">
               <span class="mm-card__title">
                 <mm-icon name="compass" :size="15"></mm-icon>换个分类看看
+              </span>
+              <span class="mm-section__more" @click="goCategories">
+                全部
+                <mm-icon name="chevron-right" :size="12"></mm-icon>
               </span>
             </div>
             <div class="mm-card__body mm-card__body--tight">
               <div class="related-list" style="max-height:none">
                 <div class="v-item" v-for="c in otherCategories" :key="'c' + c.id" @click="goCategory(c.id)">
                   <div class="v-item__cover v-item__cover--sm">
-                    <img v-if="c.cover_url" :src="c.cover_url" :alt="c.name" />
+                    <img v-if="c.cover_url" :src="c.cover_url" :alt="c.name" loading="lazy" @error="onImgError" />
                     <div v-else class="v-card__placeholder" :style="{ background: grad(c.name) }" style="font-size:14px">
                       {{ initials(c.name) }}
                     </div>
@@ -210,6 +235,9 @@
             this.load();
             window.scrollTo({ top: 0, behavior: 'smooth' });
           },
+          goCategories: function () {
+            util.go(MM.config.PATHS.webCategories);
+          },
           goCategory: function (id) {
             util.go(MM.config.PATHS.webCategory, { id: id });
           },
@@ -218,6 +246,9 @@
           },
           initials: function (t) {
             return util.coverInitials(t);
+          },
+          onImgError: function (e) {
+            e.target.style.display = 'none';
           }
         }
       });

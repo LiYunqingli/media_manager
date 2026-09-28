@@ -27,6 +27,7 @@
         theme: MM.ui.getTheme(),
         kw: this.keyword,
         categories: [],
+        catOpen: false,
         menuOpen: false
       };
     },
@@ -37,6 +38,20 @@
       },
       navActive: function () {
         return this.active;
+      },
+      /** 下拉里最多展示的分类数（避免分类过多把面板撑爆） */
+      navCategories: function () {
+        return this.categories.slice(0, 12);
+      },
+      /** 当前是否停在某个分类相关页面上（分类总览 or 分类详情） */
+      catActive: function () {
+        return this.active === 'categories' || this.active.indexOf('cat-') === 0;
+      },
+      /** 移动端 tabbar 高亮索引：分类入口单独占一格（未匹配到任何一格时给 -1 表示不高亮） */
+      tabIndex: function () {
+        var map = { home: 0, categories: 1, favorites: 2, history: 3, profile: 4 };
+        if (this.catActive) return 1;
+        return map[this.active] === undefined ? -1 : map[this.active];
       }
     },
     mounted: function () {
@@ -52,24 +67,43 @@
       this._onTheme = function () {
         self.theme = MM.ui.getTheme();
       };
+      this._onDocClick = function (e) {
+        if (self.$el && !self.$el.contains(e.target)) self.catOpen = false;
+      };
+      this._onKey = function (e) {
+        if (e.key === 'Escape') self.catOpen = false;
+      };
       global.addEventListener('mm:theme-change', this._onTheme);
+      document.addEventListener('click', this._onDocClick);
+      document.addEventListener('keydown', this._onKey);
     },
     unmounted: function () {
       global.removeEventListener('mm:theme-change', this._onTheme);
+      document.removeEventListener('click', this._onDocClick);
+      document.removeEventListener('keydown', this._onKey);
     },
     methods: {
       onTab: function (index) {
-        this.go(['home', 'favorites', 'history', 'profile'][index] || 'home');
+        this.go(['home', 'categories', 'favorites', 'history', 'profile'][index] || 'home');
+      },
+      toggleCat: function () {
+        this.catOpen = !this.catOpen;
+      },
+      goCategories: function () {
+        this.catOpen = false;
+        util.go(MM.config.PATHS.webCategories);
+      },
+      goCategory: function (id) {
+        this.catOpen = false;
+        util.go(MM.config.PATHS.webCategory, { id: id });
       },
       go: function (name) {
         var paths = MM.config.PATHS;
         if (name === 'home') util.go(paths.webHome);
+        else if (name === 'categories') util.go(paths.webCategories);
         else if (name === 'favorites') util.go(paths.webFavorites);
         else if (name === 'history') util.go(paths.webHistory);
         else if (name === 'profile') util.go(paths.webProfile);
-      },
-      goCategory: function (id) {
-        util.go(MM.config.PATHS.webCategory, { id: id });
       },
       submitSearch: function () {
         var kw = (this.kw || '').trim();
@@ -100,9 +134,33 @@
       '      </div>',
       '      <nav class="web-nav">',
       '        <span class="web-nav__item" :class="{ \'web-nav__item--active\': navActive === \'home\' }" @click="go(\'home\')">首页</span>',
-      '        <span class="web-nav__item" v-for="c in categories" :key="c.id"',
-      '          :class="{ \'web-nav__item--active\': navActive === \'cat-\' + c.id }"',
-      '          @click="goCategory(c.id)">{{ c.name }}</span>',
+      '        <div class="web-nav__drop" :class="{ \'web-nav__drop--open\': catOpen }">',
+      '          <span class="web-nav__item web-nav__item--drop"',
+      '            :class="{ \'web-nav__item--active\': catActive }"',
+      '            role="button" tabindex="0" aria-haspopup="true" :aria-expanded="catOpen ? \'true\' : \'false\'"',
+      '            @click.stop="toggleCat" @keyup.enter="toggleCat">',
+      '            <mm-icon name="grid" :size="14"></mm-icon>',
+      '            <span>分类</span>',
+      '            <mm-icon class="web-nav__caret" name="chevron-down" :size="12"></mm-icon>',
+      '          </span>',
+      '          <div class="web-catmenu" v-show="catOpen">',
+      '            <div class="web-catmenu__head">',
+      '              <span>按分类浏览</span>',
+      '              <span class="web-catmenu__all" @click="goCategories">全部分类',
+      '                <mm-icon name="chevron-right" :size="12"></mm-icon>',
+      '              </span>',
+      '            </div>',
+      '            <div class="web-catmenu__list" v-if="navCategories.length">',
+      '              <span class="web-catmenu__item" v-for="c in navCategories" :key="c.id" @click="goCategory(c.id)">',
+      '                <span class="web-catmenu__name">{{ c.name }}</span>',
+      '                <span class="web-catmenu__count">{{ c.video_count }}</span>',
+      '              </span>',
+      '            </div>',
+      '            <div class="web-catmenu__empty" v-else>暂无分类</div>',
+      '          </div>',
+      '        </div>',
+      '        <span class="web-nav__item" :class="{ \'web-nav__item--active\': navActive === \'favorites\' }" @click="go(\'favorites\')">收藏</span>',
+      '        <span class="web-nav__item" :class="{ \'web-nav__item--active\': navActive === \'history\' }" @click="go(\'history\')">历史</span>',
       '      </nav>',
       '      <div class="web-search">',
       '        <input v-model="kw" placeholder="搜索视频…" @keyup.enter="submitSearch" />',
@@ -131,9 +189,9 @@
       '    MediaManager 视频管理系统 · 数据来源于本站内容',
       '  </footer>',
       '  <div class="web-tabbar">',
-      '    <van-tabbar :model-value="navActive === \'home\' ? 0 : navActive === \'favorites\' ? 1 : navActive === \'history\' ? 2 : navActive === \'profile\' ? 3 : -1"',
-      '      @change="onTab">',
+      '    <van-tabbar :model-value="tabIndex" @change="onTab">',
       '      <van-tabbar-item icon="home-o">首页</van-tabbar-item>',
+      '      <van-tabbar-item icon="apps-o">分类</van-tabbar-item>',
       '      <van-tabbar-item icon="star-o">收藏</van-tabbar-item>',
       '      <van-tabbar-item icon="clock-o">历史</van-tabbar-item>',
       '      <van-tabbar-item icon="user-o">我的</van-tabbar-item>',
