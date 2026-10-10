@@ -8,14 +8,23 @@ from app.db import session as db
 _COLS = "id, name, description, cover, sort, status, created_at, updated_at"
 
 
-def list_all(*, only_enabled: bool = False, allowed_ids: list[int] | None = None) -> list[dict[str, Any]]:
-    """列出分类，附带视频数量。
+def list_all(
+    *,
+    only_enabled: bool = False,
+    allowed_ids: list[int] | None = None,
+    deny_video_ids: list[int] | None = None,
+) -> list[dict[str, Any]]:
+    """列出分类，附带视频数量与「默认封面」。
 
     :param only_enabled: 只返回 status=1
     :param allowed_ids: 限定 ID 集合（None = 不限制；空列表 = 返回空）
+    :param deny_video_ids: 视频黑名单。分类自身没设封面时，默认封面取自该分类下
+        最热的一条视频；这里把用户被禁看的那几条排除掉，避免用一张不该看到的
+        图当分类封面。
     """
     where: list[str] = []
     params: list[Any] = []
+    sub_params: list[Any] = []
 
     if only_enabled:
         where.append("c.status = 1")
@@ -25,16 +34,28 @@ def list_all(*, only_enabled: bool = False, allowed_ids: list[int] | None = None
         where.append(f"c.id IN ({','.join(['%s'] * len(allowed_ids))})")
         params.extend(allowed_ids)
 
+    deny_clause = ""
+    if deny_video_ids:
+        deny_clause = f"AND v.id NOT IN ({','.join(['%s'] * len(deny_video_ids))})"
+        sub_params.extend(deny_video_ids)
+
     clause = f"WHERE {' AND '.join(where)}" if where else ""
+    # 注意参数顺序：默认封面的子查询出现在 SELECT 里（在 WHERE 之前），
+    # 所以它的占位符参数必须排在前面。
     sql = f"""
         SELECT c.id, c.name, c.description, c.cover, c.sort, c.status,
                c.created_at, c.updated_at,
-               (SELECT COUNT(*) FROM video v WHERE v.category_id = c.id AND v.status = 1) AS video_count
+               (SELECT COUNT(*) FROM video v WHERE v.category_id = c.id AND v.status = 1) AS video_count,
+               (SELECT v.cover FROM video v
+                 WHERE v.category_id = c.id AND v.status = 1 AND v.cover <> ''
+                   {deny_clause}
+                 ORDER BY v.view_count DESC, v.created_at DESC, v.id DESC
+                 LIMIT 1) AS default_cover
         FROM category c
         {clause}
         ORDER BY c.sort ASC, c.id ASC
     """
-    return db.query_all(sql, tuple(params) or None)
+    return db.query_all(sql, tuple(sub_params + params) or None)
 
 
 def list_with_total_videos() -> list[dict[str, Any]]:

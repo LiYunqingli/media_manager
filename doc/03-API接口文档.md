@@ -190,16 +190,33 @@ GET /api/client/home
 ### 3.2 分类
 
 ```
-GET /api/client/categories
+GET /api/client/categories?with_all=1
 ```
 
 只返回**当前用户可见且启用**的分类，每项带 `video_count`。
 
+分类对象里的封面有两个字段，语义不同：
+
+| 字段 | 含义 |
+| --- | --- |
+| `cover` / `cover_url` | 管理员手工设置的分类封面，未设置时为空 |
+| `default_cover` / `default_cover_url` | **默认封面**：该分类下播放量最高（并列取最新）的一条视频的封面；用户被禁看的视频不参与挑选 |
+| `video_count` | 该分类下可见视频数 |
+
+用户端展示规则：`cover_url || default_cover_url`（前端封装为 `MM.util.categoryCover(c)`）。
+
+`with_all=1` 时在列表**首位**追加一个虚拟分类「完整视频」（`id = 0`，所有分类合并的聚合入口，
+`video_count` 为全站可见视频数）。`with_all` 默认为 `0`，所以「我的-可访问分类」这类
+只关心真实分类的页面不会被这条聚合入口污染。
+
 ```
-GET /api/client/categories/{category_id}?page=1&page_size=20&order_by=created_at
+GET /api/client/categories/0?page=1&page_size=20&order_by=created_at
 ```
 
-分类详情 + 该分类下视频分页。`data.category` 为分类对象。分类不可见时返回 `code=3002`。
+`category_id = 0` 即「完整视频」：不校验分类可见性（本来就不存在这个分类），
+返回全站可见视频分页，`data.category` 是虚拟分类对象（名称固定为「完整视频」）。
+其余 `category_id > 0` 的语义不变：分类详情 + 该分类下视频分页，
+分类不可见时返回 `code=3002`。
 
 `order_by` 可选：`created_at`（默认）/ `view_count` / `duration` / `title` / `id`。
 

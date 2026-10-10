@@ -46,9 +46,10 @@
         </div>
 
         <div class="mm-grid mm-grid--cat" v-if="shown.length">
-          <div class="cat-card" v-for="c in shown" :key="c.id" @click="goCategory(c.id)">
+          <div class="cat-card" v-for="c in shown" :key="c.id" @click="goCategory(c.id)"
+               :class="{ 'cat-card--all': c.id === 0 }">
             <div class="cat-card__cover">
-              <img v-if="c.cover_url" :src="c.cover_url" :alt="c.name" loading="lazy" @error="onImgError" />
+              <img v-if="coverOf(c)" :src="coverOf(c)" :alt="c.name" loading="lazy" @error="onImgError" />
               <!-- 无封面时只铺渐变底，不叠首字母：下方标题已有名称，重复反而显脏 -->
               <div v-else class="cat-card__fallback" :style="{ background: grad(c.name) }"></div>
               <div class="cat-card__mask"></div>
@@ -106,7 +107,8 @@
         mounted: function () {
           var self = this;
           MM.http
-            .get('/client/categories')
+            // with_all=1：首位多出「完整视频」（id=0，全部分类合并）这一聚合入口
+            .get('/client/categories', { with_all: 1 })
             .then(function (list) {
               self.categories = list || [];
               self.loading = false;
@@ -122,6 +124,9 @@
           },
           grad: function (t) {
             return util.coverGradient(t);
+          },
+          coverOf: function (c) {
+            return util.categoryCover(c);
           },
           initials: function (t) {
             return util.coverInitials(t);

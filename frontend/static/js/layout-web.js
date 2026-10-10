@@ -57,7 +57,8 @@
     mounted: function () {
       var self = this;
       MM.http
-        .get('/client/categories')
+        // with_all=1：下拉首位是「完整视频」（id=0，全部分类合并）
+        .get('/client/categories', { with_all: 1 })
         .then(function (list) {
           self.categories = list || [];
         })

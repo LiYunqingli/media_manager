@@ -27,16 +27,16 @@
 
         <div>
           <!-- 分类 banner -->
-          <section class="cat-hero" :class="{ 'cat-hero--plain': !category.cover_url }" v-if="category">
+          <section class="cat-hero" :class="{ 'cat-hero--plain': !coverOf(category) }" v-if="category">
             <div class="cat-hero__bg">
-              <img v-if="category.cover_url" :src="category.cover_url" :alt="category.name" />
+              <img v-if="coverOf(category)" :src="coverOf(category)" :alt="category.name" />
               <div v-else class="cat-hero__fallback" :style="{ background: grad(category.name) }"></div>
             </div>
             <div class="cat-hero__mask"></div>
             <div class="cat-hero__content">
               <!-- 有封面才显示方形缩略图；无封面时背景渐变已表达同一信息，再放方块是冗余 -->
-              <div class="cat-hero__avatar" v-if="category.cover_url">
-                <img :src="category.cover_url" :alt="category.name" />
+              <div class="cat-hero__avatar" v-if="coverOf(category)">
+                <img :src="coverOf(category)" :alt="category.name" />
               </div>
               <div class="cat-hero__text">
                 <div class="cat-hero__crumb" @click="goCategories">
@@ -80,7 +80,7 @@
             <div class="mm-grid" v-if="videos.length">
               <v-card v-for="v in videos" :key="v.id" :video="v"></v-card>
             </div>
-            <mm-empty v-else icon="folder" text="该分类下暂时没有视频">
+            <mm-empty v-else icon="folder" :text="isAll ? '全站暂时没有视频' : '该分类下暂时没有视频'">
               <span class="mm-btn mm-btn--sm" @click="goCategories">去其他分类看看</span>
             </mm-empty>
             <mm-pager :page="page" :pages="pages" :total="total" @change="changePage"></mm-pager>
@@ -103,7 +103,7 @@
               <div class="related-list" style="max-height:none">
                 <div class="v-item" v-for="c in otherCategories" :key="'c' + c.id" @click="goCategory(c.id)">
                   <div class="v-item__cover v-item__cover--sm">
-                    <img v-if="c.cover_url" :src="c.cover_url" :alt="c.name" loading="lazy" @error="onImgError" />
+                    <img v-if="coverOf(c)" :src="coverOf(c)" :alt="c.name" loading="lazy" @error="onImgError" />
                     <div v-else class="v-card__placeholder" :style="{ background: grad(c.name) }" style="font-size:14px">
                       {{ initials(c.name) }}
                     </div>
@@ -164,6 +164,10 @@
           };
         },
         computed: {
+          /** 是否停在「完整视频」聚合页（id=0，所有分类合并） */
+          isAll: function () {
+            return !this.categoryId;
+          },
           otherCategories: function () {
             var self = this;
             return this.allCategories.filter(function (c) {
@@ -174,14 +178,15 @@
         mounted: function () {
           this.loadCategories();
           this.loadHot();
-          if (this.categoryId) this.load();
-          else this.loading = false;
+          // categoryId=0 是「完整视频」，同样要走一次请求（取全站视频列表）
+          this.load();
         },
         methods: {
           loadCategories: function () {
             var self = this;
             MM.http
-              .get('/client/categories')
+              // with_all=1：拿到首位「完整视频」以便渲染切换标签条
+              .get('/client/categories', { with_all: 1 })
               .then(function (list) {
                 self.allCategories = list || [];
                 if (!self.category && self.categoryId) {
@@ -243,6 +248,9 @@
           },
           grad: function (t) {
             return util.coverGradient(t);
+          },
+          coverOf: function (c) {
+            return util.categoryCover(c);
           },
           initials: function (t) {
             return util.coverInitials(t);

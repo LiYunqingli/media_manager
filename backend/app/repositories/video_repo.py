@@ -192,6 +192,42 @@ def list_page(
     return rows, total
 
 
+def count_visible(
+    *,
+    status: str = "1",
+    category_id: int | None = None,
+    category_ids: list[int] | None = None,
+    deny_category_ids: list[int] | None = None,
+    video_allow_ids: list[int] | None = None,
+    video_deny_ids: list[int] | None = None,
+) -> int:
+    """按可见性规则统计视频条数（用户端「完整视频」汇总用）。
+
+    与 :func:`list_page` 共用同一套 ``_visibility`` 片段，保证「列表里的条数」
+    与「汇总显示的条数」永远一致。
+    """
+    where: list[str] = []
+    params: list[Any] = []
+
+    if category_id:
+        where.append("v.category_id = %s")
+        params.append(category_id)
+    if status in ("0", "1"):
+        where.append("v.status = %s")
+        params.append(int(status))
+
+    vis_sql, vis_params = _visibility(
+        category_ids=category_ids,
+        deny_category_ids=deny_category_ids or [],
+        video_allow_ids=video_allow_ids or [],
+        video_deny_ids=video_deny_ids or [],
+    )
+    where.append(f"({vis_sql})")
+    params.extend(vis_params)
+
+    return db.count(f"SELECT COUNT(*) AS c FROM video v WHERE {' AND '.join(where)}", tuple(params))
+
+
 def related(
     video_id: int,
     category_id: int,

@@ -83,13 +83,24 @@ def present_videos(rows: list[dict[str, Any]], *, detail: bool = False) -> list[
 # 分类
 # --------------------------------------------------------------------------- #
 def present_category(row: dict[str, Any]) -> dict[str, Any]:
+    """分类出参。
+
+    ``cover`` / ``cover_url``：管理员手工设置的分类封面（可能为空）。
+    ``default_cover`` / ``default_cover_url``：分类未设封面时，取该分类下
+    **播放量最高**的一条视频的封面兜底（播放量相同取最新）。两者分开返回，
+    是为了让用户端可以「有手工封面用手工、没有就用默认」，而管理端仍能分辨
+    「封面是我自己设的，还是自动兜底的」。
+    """
     cover = row.get("cover") or ""
+    default_cover = row.get("default_cover") or ""
     return {
         "id": int(row.get("id") or 0),
         "name": row.get("name") or "",
         "description": row.get("description") or "",
         "cover": cover,
         "cover_url": build_media_url(cover),
+        "default_cover": default_cover,
+        "default_cover_url": build_media_url(default_cover),
         "sort": int(row.get("sort") or 0),
         "status": int(row.get("status") or 0),
         "video_count": int(row.get("video_count") or 0),

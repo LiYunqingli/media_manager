@@ -527,6 +527,16 @@
   overflow: hidden;
   min-height: 40px;
 }
+/* 「完整视频」聚合入口：不是真实分类，用品牌色描边 + 高亮计数与普通卡片区分 */
+.cat-card--all,
+.cat-card--all:hover {
+  border-color: var(--primary);
+}
+.cat-card--all .cat-card__count {
+  background: var(--primary);
+  color: var(--primary-text);
+  font-weight: 600;
+}
 
 /* 详情页 banner */
 .cat-hero {

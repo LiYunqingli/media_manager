@@ -213,5 +213,15 @@
     return util.escapeHtml(t.slice(0, 2));
   };
 
+  /**
+   * 分类封面：优先用管理员手工设置的封面，没有则回落到「该分类最热视频」的封面。
+   * 后端把两者拆成 cover_url / default_cover_url 分开返回（管理端要能区分
+   * 「封面是我自己设的」还是「自动兜底的」），页面模板统一走这里合并。
+   */
+  util.categoryCover = function (category) {
+    if (!category) return '';
+    return category.cover_url || category.default_cover_url || '';
+  };
+
   MM.util = util;
 })(window);
