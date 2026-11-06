@@ -34,6 +34,14 @@ finished       100        完成
 N_m3u8DL-RE 在 stdout **不是终端**时，会把进度条反复重写在**同一行**且不带任何
 换行符（实测：整段进度输出首尾相连、连 ``\\r`` 都没有）。所以**不能按行读**，
 只能用「累积缓冲区 + 在尾部反复正则取最后一次匹配」的方式解析——见 :func:`_pump`。
+
+缺片容错
+--------
+源站永久丢分片（回源 404/死链）时，RE 默认的 ``--check-segments-count`` 会让**整个
+任务失败**，且**退出码仍是 0**——所以只能靠「暂存目录里没有产物」间接发现，最终表现
+为「未找到下载产物」。本模块默认传 ``--check-segments-count false``：已拿到的分片照常
+合并出文件，缺失数量用各轨道进度条尾部的 ``已下/总数`` 统计（:func:`_count_missing_segments`）
+后写进任务提示。开关见 ``download.check_segments_count``。
 """
 from __future__ import annotations
 
@@ -359,6 +367,15 @@ def _build_command(binary: Path, task: dict[str, Any], staging: Path, save_name:
         "--force-ansi-console",
         "--no-ansi-color",
     ]
+    # 分片数量校验。N_m3u8DL-RE 默认 true：只要有一个分片重试耗尽仍拿不到（源站 404/死链），
+    # 整个任务就被判「失败」、不产出任何文件——**且它的退出码依然是 0**，所以 _run_task 里
+    # `returncode != 0` 那条分支根本拦不住，最终只会以「未找到下载产物」的形式暴露出来。
+    # 默认关闭：缺片照常合并出文件，缺失数量由 _pump 统计后写进任务提示，用户仍能知道不完整。
+    cmd += [
+        "--check-segments-count",
+        "true" if bool(settings.get("download.check_segments_count", False)) else "false",
+    ]
+
     if bool(settings.get("download.auto_select", True)):
         cmd.append("--auto-select")
 
@@ -450,7 +467,9 @@ def _run_task(task_id: str) -> None:
         proc = subprocess.Popen(cmd, **popen_kwargs)  # noqa: S603
         with _LOCK:
             _RUNNING[task_id] = proc
-        _pump(task_id, proc, staging, started, settings)
+        # 返回源站缺失的分片数：关闭 --check-segments-count 后，缺片不再让 RE 整体失败，
+        # 这个数字是我们唯一能告诉用户「产物不完整」的依据，必须在入库时写进任务提示。
+        missing_segments = _pump(task_id, proc, staging, started, settings)
         returncode = proc.wait()
 
         if _is_cancelled(task_id):
@@ -476,7 +495,7 @@ def _run_task(task_id: str) -> None:
             download_repo.update(task_id, {"stage": "cancelled", "message": "已取消"})
             return
 
-        _finalize(task_id, task, media, staging, started, settings)
+        _finalize(task_id, task, media, staging, started, settings, missing_segments=missing_segments)
 
     except BizError as exc:
         logger.error("下载任务失败 %s: %s", task_id, exc.message)
@@ -524,8 +543,13 @@ def _finalize(
     staging: Path,
     started: float,
     settings: Any,
+    missing_segments: int = 0,
 ) -> None:
-    """把下载产物搬进 storage/videos 并走 ingest 入库。"""
+    """把下载产物搬进 storage/videos 并走 ingest 入库。
+
+    :param missing_segments: 源站缺失的分片数（0 = 完整）。>0 时任务**仍然算成功**，
+        但必须在提示里说明产物不完整——这正是不再让缺片直接判失败后的补偿。
+    """
     video_root = settings.storage_dir("video_dir")
     sub = file_utils.dated_subdir(by_day=False)
     title = str(task.get("title") or media.stem)
@@ -582,6 +606,9 @@ def _finalize(
     )
 
     message = f"完成，耗时 {time.time() - started:.1f}s"
+    if missing_segments:
+        logger.warning("下载产物不完整 %s：源站缺失 %d 个分片", task_id, missing_segments)
+        message += f"｜⚠ 源站缺失 {missing_segments} 个分片，视频可能有短暂卡顿/花屏"
     if outcome.notes:
         message += "｜注意：" + "；".join(outcome.notes)
     if cover_rel:
@@ -647,7 +674,7 @@ def _record_session(
 class _BarSnapshot:
     """一次解析的结果（多轨进度条的汇总）。"""
 
-    __slots__ = ("percent", "done_bytes", "total_bytes", "speed", "eta", "segments")
+    __slots__ = ("percent", "done_bytes", "total_bytes", "speed", "eta", "segments", "track_segments")
 
     def __init__(self) -> None:
         self.percent: float | None = None
@@ -656,6 +683,8 @@ class _BarSnapshot:
         self.speed = 0
         self.eta = 0
         self.segments = ""
+        # 轨道标签 -> (已下分片数, 该轨总分片数)。用于统计「源站缺片」的数量。
+        self.track_segments: dict[str, tuple[int, int]] = {}
 
 
 def _parse_bars(window: str) -> _BarSnapshot:
@@ -689,7 +718,7 @@ def _parse_bars(window: str) -> _BarSnapshot:
     percents: list[float] = []
     speeds: list[int] = []
     etas: list[int] = []
-    for chunk in chunks.values():
+    for track, chunk in chunks.items():
         pct = _last(_RE_PERCENT, chunk)
         if pct:
             percents.append(min(100.0, float(pct.group(1))))
@@ -703,6 +732,10 @@ def _parse_bars(window: str) -> _BarSnapshot:
         eta_match = _last(_RE_ETA, chunk)
         if eta_match and eta_match.group(1) != "--:--:--":
             etas.append(_hms_to_seconds(eta_match.group(1)))
+        # 每轨的分片计数（如 ``204/204``）：缺片统计的数据源，见 _pump 收尾。
+        seg = _last(_RE_SEGMENT, chunk)
+        if seg:
+            snap.track_segments[track] = (int(seg.group(1)), int(seg.group(2)))
 
     if percents:
         snap.percent = max(percents)
@@ -720,10 +753,27 @@ def _parse_bars(window: str) -> _BarSnapshot:
     return snap
 
 
-def _pump(task_id: str, proc: subprocess.Popen, staging: Path, started: float, settings: Any) -> None:
-    """持续读取子进程输出并更新进度（详见模块 docstring 的「进度从哪来」）。"""
+def _count_missing_segments(track_segments: dict[str, tuple[int, int]]) -> int:
+    """统计源站缺失的分片数（各轨道「总数 - 已下」之和）。
+
+    只统计 ``downloaded > 0`` 的轨道：多轨串行下载时，尚未轮到的轨道会长时间停在
+    ``0/100`` 的**占位状态**，那 100 是占位值不是真实总数，直接计入会凭空多出上百片。
+    """
+    missing = 0
+    for downloaded, total in track_segments.values():
+        if downloaded > 0 and total > downloaded:
+            missing += total - downloaded
+    return missing
+
+
+def _pump(task_id: str, proc: subprocess.Popen, staging: Path, started: float, settings: Any) -> int:
+    """持续读取子进程输出并更新进度（详见模块 docstring 的「进度从哪来」）。
+
+    返回**源站缺失的分片数**（0 = 完整），口径见 :func:`_count_missing_segments`。
+    该值由 :func:`_run_task` 透传给 :func:`_finalize`，最终写进任务提示。
+    """
     if proc.stdout is None:  # pragma: no cover - Popen 已保证有 stdout
-        return
+        return 0
     timeout = float(settings.get("download.timeout_seconds", 7200) or 0)
     buf = ""
     phase = "downloading"
@@ -732,6 +782,8 @@ def _pump(task_id: str, proc: subprocess.Popen, staging: Path, started: float, s
     snap = _BarSnapshot()
     percent = 0.0
     segments = ""
+    # 累积各轨道的最新 (已下, 总数)；轨道一旦出现过就常驻，即使它的进度行被后续输出顶出窗口
+    track_segs: dict[str, tuple[int, int]] = {}
 
     while True:
         try:
@@ -760,6 +812,8 @@ def _pump(task_id: str, proc: subprocess.Popen, staging: Path, started: float, s
             snap.eta = parsed.eta
         if parsed.segments:
             segments = parsed.segments
+        if parsed.track_segments:
+            track_segs.update(parsed.track_segments)
 
         if "Binary merging" in window or "Muxing to" in window or "Rename to" in window:
             phase = "muxing"
@@ -815,6 +869,7 @@ def _pump(task_id: str, proc: subprocess.Popen, staging: Path, started: float, s
             "log_tail": _safe_tail(buf),
         },
     )
+    return _count_missing_segments(track_segs)
 
 
 def _last(pattern: re.Pattern[str], text: str) -> re.Match[str] | None:
